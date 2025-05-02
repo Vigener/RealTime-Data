@@ -1,4 +1,4 @@
-package Week1;
+package Work1;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;

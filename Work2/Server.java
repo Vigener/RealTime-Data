@@ -1,3 +1,4 @@
+package Work2;
 import java.io.*;
 import java.net.*;
 
@@ -28,7 +29,7 @@ public class Server {
                 out.writeUTF(line);
                 // 48ミリ秒の休止
                 try {
-                    Thread.sleep(500);
+                    Thread.sleep(48);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
