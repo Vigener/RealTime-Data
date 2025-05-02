@@ -85,7 +85,7 @@ public class Client {
 
                     // 出力形式
                     // open_max, open_min, high_max, high_min, low_max, low_min, close_max, close_min
-                    String record = String.format("open_Max: %s, open_min: %s, high_Max: %s, high_min: %s, low_Max: %s, low_min: %s, close_Max: %s, close_min: %s",
+                    String record = String.format("----------\nopen_Max: %s, open_min: %s, \nhigh_Max: %s, high_min: %s, \nlow_Max: %s, low_min: %s, \nclose_Max: %s, close_min: %s\n----------",
                             df.format(open_max),
                             df.format(open_min),
                             df.format(high_max),
