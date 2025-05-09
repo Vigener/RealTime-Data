@@ -22,19 +22,23 @@ public class Client {
         String host = "localhost";
         int port = 5000;
 
+        // ソケットの作成
         Socket socket = new Socket(host, port);
         System.out.println("Connected");
 
+        // 受信ストリームの作成
         DataInputStream in = new DataInputStream(socket.getInputStream());
 
         // データ受信スレッド
         Thread receiver = new Thread(() -> {
             try {
                 while (true) {
+                    // タプルを受信
                     String line = in.readUTF();
                     LocalTime receiveTime = LocalTime.now();
                     String record = line + "," + dtf.format(receiveTime);
 
+                    // タプルを受け取った時刻を取得
                     synchronized (lock) {
                         // 初期ウィンドウの設定
                         if (windowBegin == null) {
@@ -65,6 +69,7 @@ public class Client {
         receiver.start();
     }
 
+    // 集計と出力を行うメソッド
     private static void aggregateAndPrint() {
         double open_max = Double.MIN_VALUE;
         double open_min = Double.MAX_VALUE;
@@ -94,14 +99,19 @@ public class Client {
             }
         }
 
-        String result = String.format(
-                "open_Max: %s, open_min: %s, high_Max: %s, high_min: %s, low_Max: %s, low_min: %s, close_Max: %s, close_min: %s",
-                df.format(open_max), df.format(open_min),
-                df.format(high_max), df.format(high_min),
-                df.format(low_max), df.format(low_min),
-                df.format(close_max), df.format(close_min));
-
-        System.out.println(result);
+        // 出力形式
+        // open_max, open_min, high_max, high_min, low_max, low_min, close_max, close_min
+        String record = String.format("------------------------------\nopen_Max: %s, open_min: %s, \nhigh_Max: %s, high_min: %s, \nlow_Max: %s, low_min: %s, \nclose_Max: %s, close_min: %s\n------------------------------",
+                df.format(open_max),
+                df.format(open_min),
+                df.format(high_max),
+                df.format(high_min),
+                df.format(low_max),
+                df.format(low_min),
+                df.format(close_max),
+                df.format(close_min)
+        );
+        System.out.println(record);
         System.out.println(buffer.size() + " records in the buffer.");
     }
 }
