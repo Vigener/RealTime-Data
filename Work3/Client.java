@@ -9,17 +9,26 @@ import java.util.ArrayList;
 public class Client {
     public static void main(String[] args) throws IOException {
         // 引数から[Count window or Time window], [Window size], [Slide size]を取得
-        // 例: java Client Count 8 2
-        // 例: java Client Time 5 1
+        // 例: java Client count 8 2
+        // 例: java Client time 5 1
 
         // 引数の数を確認
         if (args.length != 3) {
-            System.out.println("Usage: java Client <Count/Time> <Window size> <Slide size>");
+            System.out.println("Usage: java Client -<count[c,Count]/time[t,Time]> <Window size> <Slide size>");
             return;
         }
-        String windowType = args[0]; // Count or Time
+        String windowTypeStr = args[0]; // Count or Time
         int windowSize = Integer.parseInt(args[1]); // ウィンドウサイズ
         int slideSize = Integer.parseInt(args[2]); // スライドサイズ
+        String windowType = null;
+        if (windowTypeStr.equalsIgnoreCase("-count") || windowTypeStr.equalsIgnoreCase("-c") || windowTypeStr.equalsIgnoreCase("-Count")) {
+            windowType = "Count";
+        } else if (windowTypeStr.equalsIgnoreCase("-time") || windowTypeStr.equalsIgnoreCase("-t") || windowTypeStr.equalsIgnoreCase("-Time")) {
+            windowType = "Time";
+        } else {
+            System.out.println("Invalid window type option. Use '-count', '-c', '-Count', '-time', '-t', or '-Time'.");
+            return;
+        }
         // windowSizeとslideSizeの値が正の整数であることを確認
         if (windowSize <= 0 || slideSize <= 0) {
             System.out.println("Window size and slide size must be positive integers.");
@@ -48,11 +57,13 @@ public class Client {
         // 受け取ったタプルを格納するバッファ
         String line = "";
         ArrayList<String> temp_buffer = new ArrayList<String>();
-        LocalTime[] window = null;
 
         // フォーマットの指定
         DecimalFormat df = new DecimalFormat("#.00"); // 数値のフォーマットを指定
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("HH:mm:ss.SS");
+
+        // ウィンドウの初期化
+        LocalTime[] window = null;
 
         // タプルの受信
         try {
@@ -69,14 +80,33 @@ public class Client {
                 System.out.println(output_line);
 
                 if (windowType.equals("Count")) {
+                    // ウィンドウのサイズを指定
+                    int windowSizeCount = windowSize; // ウィンドウサイズ
+                    int slideSizeCount = slideSize; // スライドサイズ
+
+                    // バッファがウィンドウサイズと同じサイズになったら集計
+                    if (temp_buffer.size() == windowSizeCount) {
+                        // ウィンドウの終了インデックスを超えたタプルを集計
+                        aggregateAndPrint(temp_buffer, df);
+
+                        // ウィンドウの更新（Slide size分だけスライド）
+                        for (int i = 0; i < slideSizeCount; i++) {
+                            temp_buffer.remove(0); // スライドサイズ分だけ削除
+                        }
+                    }
 
                 } else if (windowType.equals("Time")) {
-                    // ウィンドウの開始時刻と終了時刻を指定
-                    LocalTime start = time;
-                    LocalTime end = start.plusSeconds(windowSize); 
+                    if (window == null) {
+                        // ウィンドウの開始時刻と終了時刻を指定
+                        LocalTime start = time;
+                        // LocalTime partition = time.plusSeconds(slideSize); // スライドサイズを加算
+                        LocalTime end = start.plusSeconds(windowSize); 
 
-                    // ウィンドウの開始時刻と終了時刻を配列に格納
-                    window = new LocalTime[] { start, end };
+                        // ウィンドウの開始時刻と終了時刻を配列に格納
+                        // window = new LocalTime[] { start, partition, end };
+                        window = new LocalTime[] { start, end };
+                        System.out.println("Window initialized: " + dtf.format(window[0]) + " to " + dtf.format(window[1]));
+                    }
 
                     // ウィンドウの終了時刻を超えたタプルを集計
                     if (time.isAfter(window[1])) {
@@ -85,9 +115,13 @@ public class Client {
 
                         // ウィンドウの更新（Slide size分だけスライド）
                         LocalTime newStart = window[0].plusSeconds(slideSize);
+                        // LocalTime newPartition = window[1].plusSeconds(slideSize);
                         LocalTime newEnd = window[1].plusSeconds(slideSize);
                         window[0] = newStart;
+                        // window[1] = newPartition;
                         window[1] = newEnd;
+
+                        System.out.println("Window updated: " + dtf.format(window[0]) + " to " + dtf.format(window[1]));
 
                         // バッファの先頭を削除
                         // ウィンドウの開始時刻を超えたタプルを削除
@@ -105,6 +139,9 @@ public class Client {
                             }
                         }
                     }
+                } else {
+                    System.out.println("Invalid window type. Use 'count' or 'time'.");
+                    return;
                 }
 
                 // // endを遅らせる値を変数に格納
@@ -141,50 +178,54 @@ public class Client {
     }
 
     private static void aggregateAndPrint(ArrayList<String> temp_buffer, DecimalFormat df) {
-        // 最大最小の計算
-        double open_max = Double.MIN_VALUE;
-        double open_min = Double.MAX_VALUE;
-        double high_max = Double.MIN_VALUE;
-        double high_min = Double.MAX_VALUE;
-        double low_max = Double.MIN_VALUE;
-        double low_min = Double.MAX_VALUE;
+        // バッファが空でないことを確認
+        if (temp_buffer.isEmpty()) {
+            return;
+        }
+        // temp_buffer内のclose値に対しての集計を行う
+        // 平均と最大と標準偏差を計算
+        double close_sum = 0.0;
         double close_max = Double.MIN_VALUE;
         double close_min = Double.MAX_VALUE;
 
+        // 平均・最大の計算
         for (String record : temp_buffer) {
             String[] fields = record.split(",");
             if (fields.length >= 6) { // Ensure there are enough fields (including timestamp)
-                double open = Double.parseDouble(fields[1].trim());
-                double high = Double.parseDouble(fields[2].trim());
-                double low = Double.parseDouble(fields[3].trim());
                 double close = Double.parseDouble(fields[4].trim());
+                close_sum += close;
 
                 // 最大値の更新
-                if (open > open_max) open_max = open;
-                if (high > high_max) high_max = high;
-                if (low > low_max) low_max = low;
-                if (close > close_max) close_max = close;
-
+                if (close > close_max) {
+                    close_max = close; // 最大値を更新
+                }
                 // 最小値の更新
-                if (open < open_min) open_min = open;
-                if (high < high_min) high_min = high;
-                if (low < low_min) low_min = low;
-                if (close < close_min) close_min = close;
+                if (close < close_min) {
+                    close_min = close; // 最小値を更新
+                }
             }
         }
+        double close_avg = close_sum / temp_buffer.size(); // 平均値
+
+        // 標準偏差の計算
+        double close_std = 0.0;
+        for (String record : temp_buffer) {
+            String[] fields = record.split(",");
+            if (fields.length >= 6) { // Ensure there are enough fields (including timestamp)
+                double close = Double.parseDouble(fields[4].trim());
+                close_std += Math.pow(close - close_avg, 2);
+            }
+        }
+        close_std = Math.sqrt(close_std / temp_buffer.size()); // 標準偏差
 
         // 出力形式
-        String record = String.format("------------------------------\nopen_Max: %s, open_min: %s, \nhigh_Max: %s, high_min: %s, \nlow_Max: %s, low_min: %s, \nclose_Max: %s, close_min: %s\n------------------------------",
-                df.format(open_max),
-                df.format(open_min),
-                df.format(high_max),
-                df.format(high_min),
-                df.format(low_max),
-                df.format(low_min),
+        String record = String.format("------------------------------\nAve: %s\nMin: %s\nMax: %s\nStd: %s\n------------------------------",
+                df.format(close_avg),
+                df.format(close_min),
                 df.format(close_max),
-                df.format(close_min)
+                df.format(close_std)
         );
         System.out.println(record);
-        System.out.println(temp_buffer.size() + " records in the buffer.");
+        // System.out.println(temp_buffer.size() + " records in the buffer.");
     }
 }
