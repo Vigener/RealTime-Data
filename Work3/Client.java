@@ -50,6 +50,7 @@ public class Client {
         // ソケットの作成
         Socket socket = new Socket(host, port);
         System.out.println("Connected");
+        System.out.println("stock, open, max, min, close, old-timestamp, new-timestamp");
 
         // 受信ストリームの作成
         DataInputStream in = new DataInputStream(socket.getInputStream());
@@ -59,7 +60,7 @@ public class Client {
         ArrayList<String> temp_buffer = new ArrayList<String>();
 
         // フォーマットの指定
-        DecimalFormat df = new DecimalFormat("#.00"); // 数値のフォーマットを指定
+        DecimalFormat df = new DecimalFormat("#0.00"); // 数値のフォーマットを指定
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("HH:mm:ss.SS");
 
         // ウィンドウの初期化
@@ -77,7 +78,7 @@ public class Client {
                 temp_buffer.add(output_line);
 
                 // 出力
-                System.out.println(output_line);
+                // System.out.println(output_line);
 
                 if (windowType.equals("Count")) {
                     // ウィンドウのサイズを指定
@@ -144,30 +145,6 @@ public class Client {
                     return;
                 }
 
-                // // endを遅らせる値を変数に格納
-                // // 5100ms
-                // long delay = 5100L; // 5100ms
-
-                // // 初期ウィンドウの用意
-                // if (window == null) {
-                //     LocalTime begin = time;
-                //     LocalTime end = time.plusNanos(delay * 1_000_000L);
-                //     window = new LocalTime[] { begin, end };
-                // }
-
-                // // 最新のタプルを受け取った時刻がendを超えていたら、そこまでに受け取ったタプルの集計に移る
-                // if (time.isAfter(window[1])) {
-                //     aggregateAndPrint(temp_buffer, df);
-
-                //     // もとのバッファの初期化
-                //     temp_buffer.clear();
-
-                //     // ウィンドウの更新
-                //     LocalTime newBegin = window[1]; // endの値をbeginにする
-                //     window[1] = newBegin.plusNanos(delay * 1_000_000L); // endを更新
-                //     window[0] = newBegin; // update begin with the new value
-
-                // }
             }
         } catch (EOFException e) {
             System.out.println("End of stream reached.");
@@ -182,50 +159,68 @@ public class Client {
         if (temp_buffer.isEmpty()) {
             return;
         }
-        // temp_buffer内のclose値に対しての集計を行う
-        // 平均と最大と標準偏差を計算
-        double close_sum = 0.0;
-        double close_max = Double.MIN_VALUE;
-        double close_min = Double.MAX_VALUE;
 
-        // 平均・最大の計算
+
+        // ウィンドウに含まれるタプルを表示
+        System.out.println("Window records:");
+        System.out.println("[");
+        for (String record : temp_buffer) {
+            System.out.println(record);
+        }
+        System.out.println("]");
+        System.out.println("------------------------------");
+        System.out.println("aggregation result:");
+
+        // 集計結果を表示
+        // ウィンドウ内に含まれる株すべてについて株ごとに集計を行う
+        java.util.Map<String, ArrayList<Double>> stockCloseMap = new java.util.HashMap<>();
+
         for (String record : temp_buffer) {
             String[] fields = record.split(",");
-            if (fields.length >= 6) { // Ensure there are enough fields (including timestamp)
+            if (fields.length >= 5) {
+                String stock = fields[0].trim();
                 double close = Double.parseDouble(fields[4].trim());
-                close_sum += close;
-
-                // 最大値の更新
-                if (close > close_max) {
-                    close_max = close; // 最大値を更新
-                }
-                // 最小値の更新
-                if (close < close_min) {
-                    close_min = close; // 最小値を更新
-                }
+                stockCloseMap.computeIfAbsent(stock, k -> new ArrayList<>()).add(close);
             }
         }
-        double close_avg = close_sum / temp_buffer.size(); // 平均値
 
-        // 標準偏差の計算
-        double close_std = 0.0;
-        for (String record : temp_buffer) {
-            String[] fields = record.split(",");
-            if (fields.length >= 6) { // Ensure there are enough fields (including timestamp)
-                double close = Double.parseDouble(fields[4].trim());
-                close_std += Math.pow(close - close_avg, 2);
+        // 株ごとに集計して出力(AからZの順にソート)
+        java.util.List<String> stockList = new java.util.ArrayList<>(stockCloseMap.keySet());
+        java.util.Collections.sort(stockList);
+
+        for (String stock : stockList) {
+            ArrayList<Double> closes = stockCloseMap.get(stock);
+            int n = closes.size();
+            double sum = 0.0;
+            double min = Double.MAX_VALUE;
+            double max = Double.MIN_VALUE;
+            for (double v : closes) {
+                sum += v;
+                min = Math.min(min, v);
+                max = Math.max(max, v);
             }
-        }
-        close_std = Math.sqrt(close_std / temp_buffer.size()); // 標準偏差
+            double ave = sum / n;
 
-        // 出力形式
-        String record = String.format("------------------------------\nAve: %s\nMin: %s\nMax: %s\nStd: %s\n------------------------------",
-                df.format(close_avg),
-                df.format(close_min),
-                df.format(close_max),
-                df.format(close_std)
-        );
-        System.out.println(record);
-        // System.out.println(temp_buffer.size() + " records in the buffer.");
+            // 標準偏差計算（不偏分散）
+            double std = 0.0;
+            if (n > 1) {
+                double sqSum = 0.0;
+                for (double v : closes) {
+                    sqSum += Math.pow(v - ave, 2);
+                }
+                std = Math.sqrt(sqSum / (n - 1));
+            }
+
+            
+            System.out.printf("%s, Ave: %s, Min: %s, Max: %s, Std: %s%n",
+                    stock,
+                    df.format(ave),
+                    df.format(min),
+                    df.format(max),
+                    df.format(std)
+            );
+        }
+        System.out.println(temp_buffer.size() + " records in the buffer.");
+        System.out.println("------------------------------");
     }
 }
