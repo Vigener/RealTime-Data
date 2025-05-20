@@ -7,7 +7,18 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 
 public class Client {
+
+    // WebSocketサーバーのインスタンス保持
+    private static WebsocketServer wsServer;
+
     public static void main(String[] args) throws IOException {
+        // 1. WebSocketサーバーの起動
+        wsServer = new WebsocketServer();
+        wsServer.start();
+        System.out.println("WebSocket server started on port " + wsServer.getPort());
+
+        // ----------------------------------------------------
+        // 2. 引数の確認・モードの決定
         // 引数から[Count window or Time window], [Window size], [Slide size]を取得
         // 例: java Client count 8 2
         // 例: java Client time 5 1
@@ -21,9 +32,11 @@ public class Client {
         int windowSize = Integer.parseInt(args[1]); // ウィンドウサイズ
         int slideSize = Integer.parseInt(args[2]); // スライドサイズ
         String windowType = null;
-        if (windowTypeStr.equalsIgnoreCase("-count") || windowTypeStr.equalsIgnoreCase("-c") || windowTypeStr.equalsIgnoreCase("-Count")) {
+        if (windowTypeStr.equalsIgnoreCase("-count") || windowTypeStr.equalsIgnoreCase("-c")
+                || windowTypeStr.equalsIgnoreCase("-Count")) {
             windowType = "Count";
-        } else if (windowTypeStr.equalsIgnoreCase("-time") || windowTypeStr.equalsIgnoreCase("-t") || windowTypeStr.equalsIgnoreCase("-Time")) {
+        } else if (windowTypeStr.equalsIgnoreCase("-time") || windowTypeStr.equalsIgnoreCase("-t")
+                || windowTypeStr.equalsIgnoreCase("-Time")) {
             windowType = "Time";
         } else {
             System.out.println("Invalid window type option. Use '-count', '-c', '-Count', '-time', '-t', or '-Time'.");
@@ -43,6 +56,8 @@ public class Client {
         System.out.println("Window Size: " + windowSize);
         System.out.println("Slide Size: " + slideSize);
 
+        // ----------------------------------------------------
+        // 3. サーバーに接続(localhost:5000)(Server.javaとの接続)
         // サーバーのホスト名とポート番号
         String host = "localhost"; // または接続先のIPアドレス
         int port = 5000;
@@ -50,21 +65,50 @@ public class Client {
         // ソケットの作成
         Socket socket = new Socket(host, port);
         System.out.println("Connected");
-        System.out.println("stock, open, max, min, close, old-timestamp, new-timestamp");
-
+        
         // 受信ストリームの作成
         DataInputStream in = new DataInputStream(socket.getInputStream());
+        // 送信ストリームの作成
+        DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+        
+        // -----------------------------------------------------
+        // 4. WebSocketクライアント側の接続が一つ以上行われるまで待つ
+        System.out.println("Waiting for WebSocket connection from client...");
+        while (wsServer.connections().size() < 1) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        
+        // time or count, window size, slide sizeをweb-app側に送信
+        sendToWebClients("###{\"WindowType\": \"" + windowType + "\", \"WindowSize\": " + windowSize
+                + ", \"SlideSize\": " + slideSize + "}");
+        System.out.println("WebSocket connected. Sending window parameters to web clients.");
+        // sendToWebClients("###{Window Type: \"" + windowType + "\", Window Size: " + windowSize + ", Slide Size: " + slideSize + "}");
 
+        
+        // -----------------------------------------------------
+        // 5. WebSocketクライアント側の接続が行われたことをサーバーに通知
+        out.writeUTF("WebSocket Connected");
+        // System.out.println("WebSocket Connected");
+        
+        // -----------------------------------------------------
+        // 6. タプルを受信して集計する
         // 受け取ったタプルを格納するバッファ
         String line = "";
         ArrayList<String> temp_buffer = new ArrayList<String>();
-
+        
         // フォーマットの指定
         DecimalFormat df = new DecimalFormat("#0.00"); // 数値のフォーマットを指定
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("HH:mm:ss.SS");
-
+        
         // ウィンドウの初期化
         LocalTime[] window = null;
+        
+        // 見出しの出力
+        System.out.println("stock, open, max, min, close, old-timestamp, new-timestamp");
 
         // タプルの受信
         try {
@@ -101,12 +145,13 @@ public class Client {
                         // ウィンドウの開始時刻と終了時刻を指定
                         LocalTime start = time;
                         // LocalTime partition = time.plusSeconds(slideSize); // スライドサイズを加算
-                        LocalTime end = start.plusSeconds(windowSize); 
+                        LocalTime end = start.plusSeconds(windowSize);
 
                         // ウィンドウの開始時刻と終了時刻を配列に格納
                         // window = new LocalTime[] { start, partition, end };
                         window = new LocalTime[] { start, end };
-                        System.out.println("Window initialized: " + dtf.format(window[0]) + " to " + dtf.format(window[1]));
+                        System.out.println(
+                                "Window initialized: " + dtf.format(window[0]) + " to " + dtf.format(window[1]));
                     }
 
                     // ウィンドウの終了時刻を超えたタプルを集計
@@ -154,12 +199,57 @@ public class Client {
         socket.close();
     }
 
+    // 集計結果をWebSocket経由で送信するためのメソッド
+    private static void sendToWebClients(String json) {
+        if (wsServer != null) {
+            wsServer.broadcast(json);
+        }
+    }
+    
+    // Window内のタプルと集計結果をJSON形式で出力するメソッド
+    private static String convertToJson(ArrayList<String> temp_buffer) {
+        StringBuilder jsonData = new StringBuilder();
+        jsonData.append("{ \"WindowRecords\": [");
+        for (int i = 0; i < temp_buffer.size(); i++) {
+            String record = temp_buffer.get(i);
+            // ","で区切られた各フィールドをJSON形式に変換
+            String[] fields = record.split(",");
+            jsonData.append("{");
+            for (int j = 0; j < fields.length-2; j++) {
+                String field = fields[j].trim();
+                // JSON形式に変換
+                if (j == 0) {
+                    jsonData.append("\"stock\": \"").append(field).append("\"");
+                } else if (j == 1) {
+                    jsonData.append(", \"open\": ").append(field);
+                } else if (j == 2) {
+                    jsonData.append(", \"max\": ").append(field);
+                } else if (j == 3) {
+                    jsonData.append(", \"min\": ").append(field);
+                } else if (j == 4) {
+                    jsonData.append(", \"close\": ").append(field);
+                }
+            }
+            jsonData.append("}");
+            // 各レコードの間にカンマを追加
+            if (i < temp_buffer.size() - 1) {
+                jsonData.append(",");
+            }
+        }
+        jsonData.append("], \"AggregationResults\": [");
+        // 集計結果をJSON形式に変換
+
+        return jsonData.toString();
+    }
+
     private static void aggregateAndPrint(ArrayList<String> temp_buffer, DecimalFormat df) {
         // バッファが空でないことを確認
         if (temp_buffer.isEmpty()) {
             return;
         }
 
+         // 集計結果をJSON形式で出力
+        String jsonWsSendData = convertToJson(temp_buffer);
 
         // ウィンドウに含まれるタプルを表示
         System.out.println("Window records:");
@@ -219,39 +309,26 @@ public class Client {
                     df.format(max),
                     df.format(std)
             );
+
+            // jsonWsSendDataに集計結果を追加
+            jsonWsSendData += "{";
+            jsonWsSendData += "\"stock\": \"" + stock + "\", ";
+            jsonWsSendData += "\"Ave\": " + df.format(ave) + ", ";
+            jsonWsSendData += "\"Min\": " + df.format(min) + ", ";
+            jsonWsSendData += "\"Max\": " + df.format(max) + ", ";
+            jsonWsSendData += "\"Std\": " + df.format(std);
+            if (stock.equals(stockList.get(stockList.size() - 1))) {
+                jsonWsSendData += "}";
+            } else {
+                jsonWsSendData += "},";
+            }
         }
         System.out.println(temp_buffer.size() + " records in the buffer.");
         System.out.println("------------------------------");
+
         
-    }
-}
-
-public class WebsocketServer extends WebSocketServer {
-
-    private static int TCP_PORT = 3000;
-
-    private static Set<WebSocket> conns;
-
-    public WebsocketServer() {
-        super(new InetSocketAddress(TCP_PORT));
-        conns = new HashSet<>();
-    }
-    // 通信が接続された場合
-    @Override
-    public void onOpen(WebSocket conn, ClientHandshake handshake) {
-        conns.add(conn);
-        conn.send("hello!!");
-    }
-    
-    //通信が切断された場合
-    @Override
-    public void onClose(WebSocket conn, int code, String reason, boolean remote) {
-        conns.remove(conn);
-    }
-
-    // メッセージを受け取った場合
-    @Override
-    public void onMessage(WebSocket conn, String message) {
-        
+        // WebSocketでReact側に送信
+        jsonWsSendData += "]}";
+        sendToWebClients(jsonWsSendData);
     }
 }

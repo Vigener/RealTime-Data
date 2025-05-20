@@ -12,6 +12,24 @@ public class Server {
         
         System.out.println("Client accepted");
 
+        // Client.javaがwebsocket通信を完了したことを報告してきてから通信を開始する
+        // 報告方法としては、Client.javaがサーバーに対して"WebSocket Connected"という文字列を送信する
+        System.out.println("Waiting for WebSocket connection from client...");
+        
+        DataInputStream in = new DataInputStream(clientSocket.getInputStream());
+        String message = "";
+        while (true) {
+            message = in.readUTF();
+            if (message.equals("WebSocket Connected")) {
+                break;
+            }
+            // System.err.println("Invalid message from client: " + message);
+            // 必要に応じてクライアントに再送要求などを送る場合はここに追加
+        }
+        System.out.println("WebSocket Connected");
+
+
+        // クライアントにデータを送信する
         DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
 
         // stock_data.txtをリソースとして読み込む
