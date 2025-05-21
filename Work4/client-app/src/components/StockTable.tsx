@@ -1,25 +1,14 @@
 import { useState } from "react";
 import { Table, ToggleButton } from "react-bootstrap";
+import type { StockProps } from "../DataType";
 
-type Stock = {
-  stock: string;
-  open: number;
-  max: number;
-  min: number;
-  close: number;
-};
-
-type Props = {
-  data: Stock[];
-};
-
-function StockTable({ data }: Props) {
+function StockTable({ StockData }: StockProps) {
   const [showAll, setShowAll] = useState(true);
   const maxHeight = 900; // px, 最大高さ
 
   return (
     <div>
-      {data.length >= 21 && (
+      {StockData.length >= 21 && (
         <div style={{ margin: "8px" }}>
           <ToggleButton
             id="toggle-show-all"
@@ -63,7 +52,7 @@ function StockTable({ data }: Props) {
             </tr>
           </thead>
           <tbody>
-            {data.map((row, idx) => (
+            {StockData.map((row, idx) => (
               <tr key={idx}>
                 <td>{row.stock}</td>
                 <td>{row.open}</td>

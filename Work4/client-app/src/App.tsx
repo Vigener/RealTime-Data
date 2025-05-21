@@ -4,41 +4,20 @@ import StockTable from "./components/StockTable";
 import AggregationGraph from "./components/AggregationGraph";
 import { ToggleButton } from "react-bootstrap";
 import AggregationTable from "./components/AggregationTable";
+import type {
+  Stock,
+  AggResult,
+  ReceivedData,
+  WindowType,
+  SlideWindowConfig,
+} from "./DataType";
 
+// サンプルデータ
 // const stockData = [
 //   { stock: "MSFT", open: 100, high: 110, low: 90, close: 105 },
 //   { stock: "AAPL", open: 200, high: 210, low: 190, close: 205 },
 //   { stock: "GOOGL", open: 300, high: 310, low: 290, close: 305 },
 // ];
-
-type Stock = {
-  stock: string;
-  open: number;
-  max: number;
-  min: number;
-  close: number;
-};
-
-type AggResult = {
-  stock: string;
-  Ave: number;
-  Min: number;
-  Max: number;
-  Std: number;
-};
-
-type ReceivedData = {
-  WindowRecords: Stock[];
-  AggregationResults: AggResult[];
-};
-
-type WindowType = "Count" | "Time";
-
-type SlideWindowConfig = {
-  WindowType: WindowType;
-  WindowSize: number; // if time window, in seconds or ms; if count window, in count
-  SlideSize: number; // same unit as windowSize
-};
 
 function App() {
   const [stockData, setStockData] = useState<Stock[]>([]);

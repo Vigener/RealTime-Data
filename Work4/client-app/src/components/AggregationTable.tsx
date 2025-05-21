@@ -1,18 +1,7 @@
 import { Table } from "react-bootstrap";
+import type { AggProps } from "../DataType";
 
-type AggResult = {
-  stock: string;
-  Ave: number;
-  Min: number;
-  Max: number;
-  Std: number;
-};
-
-type Props = {
-  data: AggResult[];
-};
-
-function AggregationTable({ data }: Props) {
+function AggregationTable({ receivedData }: AggProps) {
   return (
     <Table
       id="aggregation-table"
@@ -33,7 +22,7 @@ function AggregationTable({ data }: Props) {
         </tr>
       </thead>
       <tbody>
-        {data.map((row, idx) => (
+        {receivedData.map((row, idx) => (
           <tr key={idx}>
             <td>{row.stock}</td>
             <td>{row.Ave}</td>

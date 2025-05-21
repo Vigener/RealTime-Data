@@ -9,7 +9,7 @@ import {
   Legend,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
-// import faker from "faker";
+import type { AggProps } from "../DataType";
 
 ChartJS.register(
   CategoryScale,
@@ -19,18 +19,6 @@ ChartJS.register(
   Tooltip,
   Legend
 );
-
-type AggResult = {
-  stock: string;
-  Ave: number;
-  Min: number;
-  Max: number;
-  Std: number;
-};
-
-type Props = {
-  receivedData: AggResult[];
-};
 
 export const options = {
   responsive: true,
@@ -45,7 +33,7 @@ export const options = {
   },
 };
 
-function AggregationGraph({ receivedData }: Props) {
+function AggregationGraph({ receivedData }: AggProps) {
   const labels = receivedData.map((item) => item.stock);
   const data = {
     labels,
