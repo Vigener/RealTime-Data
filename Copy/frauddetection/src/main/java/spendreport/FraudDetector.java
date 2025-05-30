@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package io.github.vgnri.client;
+package spendreport;
 
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;

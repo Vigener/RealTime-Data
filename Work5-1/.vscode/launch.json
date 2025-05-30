@@ -1,0 +1,30 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Server",
+      "request": "launch",
+      "mainClass": "io.github.vgnri.client.Server",
+      "projectName": "Client"
+    },
+    {
+      "type": "java",
+      "name": "Client",
+      "request": "launch",
+      "mainClass": "io.github.vgnri.client.Client",
+      "projectName": "Client"
+    },
+    {
+      "type": "java",
+      "name": "DataStreamJob",
+      "request": "launch",
+      "mainClass": "FlinkJob.DataStreamJob",
+      "projectName": "FlinkJob",
+      "args": "--time --window-size 10000 --slide-size 2000"
+    }
+  ]
+}
