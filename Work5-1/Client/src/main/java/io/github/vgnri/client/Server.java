@@ -9,6 +9,11 @@ public class Server {
         ServerSocket serverSocket = new ServerSocket(port);
         System.out.println("Server started");
 
+        Socket clientSocket = serverSocket.accept();
+        DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
+
+        System.out.println("Client accepted");
+
         // stock_data.txtをリソースとして読み込む
         InputStream is = Server.class.getClassLoader().getResourceAsStream("stock_data.txt");
         if (is == null) {
@@ -16,22 +21,29 @@ public class Server {
             // エラーが発生した場合、サーバーを終了する
             return;
         }
-
-        while (true) { // 無限ループで繰り返し読み込み・送信
-            try (BufferedReader br = new BufferedReader(new InputStreamReader(is))) {
-                String line = "";
-                line = br.readLine(); // 見出し削除
-                while ((line = br.readLine()) != null) {
-                    System.out.println("Sending data: " + line); // データ送信のログを出力
-                    try {
-                        Thread.sleep(48); // データ送信間隔を調整
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(is))) {
+            String line = "";
+            line = br.readLine(); // 見出し削除
+            while ((line = br.readLine()) != null) {
+                out.writeUTF(line);
+                System.out.println("Sent: " + line);
+                try {
+                    Thread.sleep(48);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
             }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        // close the connection
+        try {
+            if (clientSocket != null) clientSocket.close();
+            if (serverSocket != null) serverSocket.close();
+            if (out != null) out.close();
+        } catch (IOException i) {
+            System.out.println(i);
         }
     }
 }

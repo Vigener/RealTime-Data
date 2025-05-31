@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "Copy/frauddetection"
+		},
+		{
+			"path": "Work5-1/Client"
+		},
+		{
+			"path": "Work4"
+		}
+	],
+	"settings": {
+		"java.compile.nullAnalysis.mode": "automatic",
+		"java.configuration.updateBuildConfiguration": "interactive"
+	}
+}
