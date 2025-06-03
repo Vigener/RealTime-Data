@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Server_Extended",
+            "request": "launch",
+            "mainClass": "io.github.vgnri.client.Server_Extended",
+            "projectName": "Client"
+        },
+        {
+            "type": "java",
+            "name": "Launch Client",
+            "request": "launch",
+            "mainClass": "work4.Client",
+            "args": "-time 5 3"
+        }
+    ]
+}

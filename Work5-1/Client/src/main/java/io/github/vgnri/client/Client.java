@@ -97,15 +97,20 @@ public class Client {
             mappedStream
                 .keyBy(stockRow -> stockRow.getStock())
                 .countWindow(windowSize, slideSize)
-                .sum("close")
+                .aggregate(
+                    new StockAggregationFunction(),
+                    new StockWindowProcess()
+                )
                 .print();
             // カウントウィンドウを適用
         } else if (windowType == WindowType.Time) {
             // タイムウィンドウを適用
             mappedStream
                 .keyBy(stockRow -> stockRow.getStock())
-                .window(SlidingProcessingTimeWindows.of(Duration.ofSeconds(windowSize),
-                            Duration.ofSeconds(slideSize)))
+                .window(
+                    SlidingProcessingTimeWindows.of(Duration.ofSeconds(windowSize), Duration.ofSeconds(slideSize))
+                )
+                .aggregate(new StockAggregationFunction(), new StockWindowProcess())
                 .print();
         }
 
