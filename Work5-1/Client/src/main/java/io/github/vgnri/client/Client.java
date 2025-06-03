@@ -104,12 +104,10 @@ public class Client {
             // タイムウィンドウを適用
             mappedStream
                 .keyBy(stockRow -> stockRow.getStock())
-                .window(SlidingProcessingTimeWindows.of(Duration.ofSeconds(windowSize), Duration.ofSeconds(slideSize)))
-                .sum("close")
+                .window(SlidingProcessingTimeWindows.of(Duration.ofSeconds(windowSize),
+                            Duration.ofSeconds(slideSize)))
                 .print();
         }
-
-        
 
         // データをターミナルに表示
 
