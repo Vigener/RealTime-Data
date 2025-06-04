@@ -109,18 +109,16 @@ public class Client {
         // }
         if (args[0].equals("-count")) {
             mappedStream
-                .keyBy(stockRow -> stockRow.getStock())
-                .countWindow(Integer.parseInt(args[1]), Integer.parseInt(args[2]))
-                .aggregate(new StockAggregationFunction(), new CountWindowProcess())
+                .countWindowAll(Integer.parseInt(args[1]), Integer.parseInt(args[2]))
+                .aggregate(new StockAllCollectingAggregationFunction(), new CountAllDetailWindowProcess())
                 .print();
         } else if (args[0].equals("-time")) {
             mappedStream
-                .keyBy(stockRow -> stockRow.getStock())
-                .window(SlidingProcessingTimeWindows.of(
+                .windowAll(SlidingProcessingTimeWindows.of(
                     Duration.ofSeconds(Integer.parseInt(args[1])),
                     Duration.ofSeconds(Integer.parseInt(args[2]))
                 ))
-                .aggregate(new StockAggregationFunction(), new StockWindowProcess())
+                .aggregate(new StockAllCollectingAggregationFunction(), new StockAllDetailWindowProcess())
                 .print();
         } else {
             exitWithUsage();
