@@ -60,17 +60,29 @@ public class Client {
         return new WindowConfig(windowSize, slideSize, windowType);
     }
 
-
     public static void main(String[] args) throws Exception {
-        // // --- コマンドライン引数の処理 ---
-        // WindowConfig config = parseArgs(args);
-        // int windowSize = config.windowSize;
-        // int slideSize = config.slideSize;
-        // WindowType windowType = config.windowType;
+        // --- WebSocketサーバーを事前に起動 ---
+        System.out.println("Starting WebSocket server...");
+        StockWebSocketServer webSocketServer = StockWebSocketServer.getInstance("localhost", 3000);
+        
+        // サーバーを別スレッドで起動
+        Thread serverThread = new Thread(() -> {
+            try {
+                webSocketServer.start();
+                System.out.println("WebSocket server is running on ws://localhost:3000");
+            } catch (Exception e) {
+                System.err.println("Failed to start WebSocket server: " + e.getMessage());
+                e.printStackTrace();
+            }
+        });
+        serverThread.setDaemon(true); // メインプロセス終了時にサーバーも終了
+        serverThread.start();
+
+        // サーバーが起動するまで少し待機
+        Thread.sleep(2000);
 
         // Flinkの実行環境を作成
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
         env.setParallelism(1);
 
         // ソケットからデータを受け取る
@@ -93,7 +105,7 @@ public class Client {
             mappedStream
                 .countWindowAll(Integer.parseInt(args[1]), Integer.parseInt(args[2]))
                 .process(new StockCountWindowFunction())  // Count専用クラス
-                .addSink(new StockRichSinkFunction("localhost", 3000));  // ソケットに送信
+                .addSink(new StockRichSinkFunction("localhost", 3000)); // WebSocketに送信
         } else if (args[0].equals("-time")) {
             mappedStream
                 .windowAll(SlidingProcessingTimeWindows.of(
@@ -101,8 +113,7 @@ public class Client {
                     Duration.ofSeconds(Integer.parseInt(args[2]))
                 ))
                 .process(new StockTimeWindowFunction())  // Time専用クラス
-                .addSink(new StockRichSinkFunction("localhost", 3000));  // ソケットに送信
-
+                .addSink(new StockRichSinkFunction("localhost", 3000));  // WebSocketに送信
         } else {
             exitWithUsage();
         }
