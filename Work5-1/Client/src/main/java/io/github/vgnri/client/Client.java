@@ -71,6 +71,8 @@ public class Client {
         // Flinkの実行環境を作成
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
+        env.setParallelism(1);
+
         // ソケットからデータを受け取る
         DataStream<String> socketStream = env.socketTextStream("localhost", 5000, "\n");
 
@@ -110,7 +112,7 @@ public class Client {
         if (args[0].equals("-count")) {
             mappedStream
                 .countWindowAll(Integer.parseInt(args[1]), Integer.parseInt(args[2]))
-                .aggregate(new StockAllCollectingAggregationFunction(), new CountAllDetailWindowProcess())
+                .process(new StockWindowFunction())
                 .print();
         } else if (args[0].equals("-time")) {
             mappedStream

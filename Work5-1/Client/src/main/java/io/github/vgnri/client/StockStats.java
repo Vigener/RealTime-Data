@@ -40,5 +40,9 @@ public class StockStats {
     public double getStdDev() {
         return count <= 1 ? 0 : Math.sqrt((sumSq - (sum * sum) / count) / (count - 1));
     }
+
+    public int getCount() {
+        return count;
+    }
 }
 

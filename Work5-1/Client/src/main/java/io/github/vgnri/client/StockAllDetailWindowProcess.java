@@ -6,7 +6,7 @@ import org.apache.flink.streaming.api.functions.windowing.ProcessAllWindowFuncti
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
 
-public class    StockAllDetailWindowProcess extends ProcessAllWindowFunction<StockAllCollectingAggregationFunction.AllStockResult, String, TimeWindow> {
+public class StockAllDetailWindowProcess extends ProcessAllWindowFunction<StockAllCollectingAggregationFunction.AllStockResult, String, TimeWindow> {
     
     @Override
     public void process(Context context, Iterable<StockAllCollectingAggregationFunction.AllStockResult> elements, Collector<String> out) {
