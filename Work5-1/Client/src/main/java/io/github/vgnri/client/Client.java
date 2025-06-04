@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
-import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
@@ -63,12 +62,11 @@ public class Client {
 
 
     public static void main(String[] args) throws Exception {
-        // --- コマンドライン引数の処理 ---
-        WindowConfig config = parseArgs(args);
-        int windowSize = config.windowSize;
-        int slideSize = config.slideSize;
-        WindowType windowType = config.windowType;
-        
+        // // --- コマンドライン引数の処理 ---
+        // WindowConfig config = parseArgs(args);
+        // int windowSize = config.windowSize;
+        // int slideSize = config.slideSize;
+        // WindowType windowType = config.windowType;
 
         // Flinkの実行環境を作成
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -77,41 +75,55 @@ public class Client {
         DataStream<String> socketStream = env.socketTextStream("localhost", 5000, "\n");
 
         // データをStockRow型にマッピング
-        DataStream<StockRow> mappedStream = socketStream.map(new MapFunction<String, StockRow>() {
-            @Override
-            public StockRow map(String value) throws Exception {
-                String[] parts = value.split("[,>]");
-                String stock = parts[0].trim();
-                double open = Double.parseDouble(parts[1].trim());
-                double high = Double.parseDouble(parts[2].trim());
-                double low = Double.parseDouble(parts[3].trim());
-                double close = Double.parseDouble(parts[4].trim());
-                DateTimeFormatter dtf = DateTimeFormatter.ofPattern("HH:mm:ss.SS");
-                String time = parts[5].trim();
-                String timestamp = LocalTime.now().format(dtf);
-                return new StockRow(stock, open, high, low, close, time, timestamp);
-            }
+        DataStream<StockRow> mappedStream = socketStream.map(value -> {
+            String[] parts = value.split(",");
+            String stock = parts[0].trim();
+            double open = Double.parseDouble(parts[1].trim());
+            double high = Double.parseDouble(parts[2].trim());
+            double low = Double.parseDouble(parts[3].trim());
+            double close = Double.parseDouble(parts[4].trim());
+            String time = parts[5].trim();
+            String timestamp = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SS"));
+            return new StockRow(stock, open, high, low, close, time, timestamp);
         });
 
-        if (windowType == WindowType.Count) {
+        // if (windowType == WindowType.Count) {
+        //     mappedStream
+        //         .keyBy(stockRow -> stockRow.getStock())
+        //         .countWindow(windowSize, slideSize)
+        //         .aggregate(
+        //             new StockAggregationFunction(),
+        //             new StockWindowProcess()
+        //         )
+        //         .print();
+        //     // カウントウィンドウを適用
+        // } else if (windowType == WindowType.Time) {
+        //     // タイムウィンドウを適用
+        //     mappedStream
+        //         .keyBy(stockRow -> stockRow.getStock())
+        //         .window(
+        //             SlidingProcessingTimeWindows.of(Duration.ofSeconds(windowSize), Duration.ofSeconds(slideSize))
+        //         )
+        //         .aggregate(new StockAggregationFunction(), new StockWindowProcess())
+        //         .print();
+        // }
+        if (args[0].equals("-count")) {
             mappedStream
                 .keyBy(stockRow -> stockRow.getStock())
-                .countWindow(windowSize, slideSize)
-                .aggregate(
-                    new StockAggregationFunction(),
-                    new StockWindowProcess()
-                )
+                .countWindow(Integer.parseInt(args[1]), Integer.parseInt(args[2]))
+                .aggregate(new StockAggregationFunction(), new CountWindowProcess())
                 .print();
-            // カウントウィンドウを適用
-        } else if (windowType == WindowType.Time) {
-            // タイムウィンドウを適用
+        } else if (args[0].equals("-time")) {
             mappedStream
                 .keyBy(stockRow -> stockRow.getStock())
-                .window(
-                    SlidingProcessingTimeWindows.of(Duration.ofSeconds(windowSize), Duration.ofSeconds(slideSize))
-                )
+                .window(SlidingProcessingTimeWindows.of(
+                    Duration.ofSeconds(Integer.parseInt(args[1])),
+                    Duration.ofSeconds(Integer.parseInt(args[2]))
+                ))
                 .aggregate(new StockAggregationFunction(), new StockWindowProcess())
                 .print();
+        } else {
+            exitWithUsage();
         }
 
         // データをターミナルに表示
@@ -119,6 +131,6 @@ public class Client {
         // mappedStream.print();
 
         // Flinkジョブを開始
-        env.execute("Socket Stream Processing");
+        env.execute("Stock Close Value Aggregation");
     }
 }
