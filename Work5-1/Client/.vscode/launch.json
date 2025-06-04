@@ -13,7 +13,18 @@
             "name": "Launch Client",
             "request": "launch",
             "mainClass": "io.github.vgnri.client.Client",
-            "args": "-count 20 10"
+            "args": "${input:clientArgs}"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "clientArgs",
+            "type": "pickString",
+            "description": "Select arguments for the Client",
+            "options": [
+                "-count 20 10",
+                "-time 5 3"
+            ]
         }
     ]
 }

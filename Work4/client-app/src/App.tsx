@@ -1,79 +1,94 @@
 import { useEffect, useState } from "react";
-import "./App.css";
-import StockTable from "./components/StockTable";
-import AggregationGraph from "./components/AggregationGraph";
 import { ToggleButton } from "react-bootstrap";
+import "./App.css";
+import AggregationGraph from "./components/AggregationGraph";
 import AggregationTable from "./components/AggregationTable";
+import StockTable from "./components/StockTable";
 import type {
-  Stock,
   AggResult,
   ReceivedData,
-  WindowType,
   SlideWindowConfig,
+  Stock,
+  WindowType,
 } from "./DataType";
-
-// サンプルデータ
-// const stockData = [
-//   { stock: "MSFT", open: 100, high: 110, low: 90, close: 105 },
-//   { stock: "AAPL", open: 200, high: 210, low: 190, close: 205 },
-//   { stock: "GOOGL", open: 300, high: 310, low: 290, close: 305 },
-// ];
 
 function App() {
   const [stockData, setStockData] = useState<Stock[]>([]);
   const [aggregationData, setAggregationData] = useState<AggResult[]>([]);
-
   const [checked, setChecked] = useState(false);
+  const [is_connected, setIsConnected] = useState(false);
   const [windowType, setWindowType] = useState<WindowType>();
   const [windowSize, setWindowSize] = useState<number>();
   const [slideSize, setSlideSize] = useState<number>();
 
   useEffect(() => {
-    const connection = new WebSocket("ws://localhost:3000");
+    let connection: WebSocket | null = null;
+    let reconnectInterval: NodeJS.Timeout | null = null;
 
-    connection.onopen = () => {
-      console.log("WebSocket connected");
-    };
+    const connectWebSocket = () => {
+      connection = new WebSocket("ws://localhost:3000");
 
-    // メッセージを受け取ったときの処理
-    connection.onmessage = (event) => {
-      try {
-        const received: ReceivedData = JSON.parse(event.data);
-        setStockData(received.WindowRecords);
-        setAggregationData(received.AggregationResults);
-        console.log("Received data:", received);
-      } catch {
-        let data = event.data;
-        if (typeof data === "string" && data.startsWith("###")) {
-          data = data.slice(3);
+      connection.onopen = () => {
+        console.log("WebSocket connected");
+        if (reconnectInterval) {
+          clearInterval(reconnectInterval); // 再接続の試行を停止
+          reconnectInterval = null;
         }
+      };
+
+      connection.onmessage = (event) => {
         try {
-          const received: SlideWindowConfig = JSON.parse(data);
-          console.log("Received window config:", received);
-          setWindowType(received.WindowType);
-          setWindowSize(received.WindowSize);
-          setSlideSize(received.SlideSize);
+          const received: ReceivedData = JSON.parse(event.data);
+          setStockData(received.WindowRecords || []);
+          setAggregationData(received.AggregationResults || []);
+          console.log("Received data:", received);
         } catch {
-          if (event.data) console.log("Received non-JSON data:", event.data);
+          let data = event.data;
+          if (typeof data === "string" && data.startsWith("###")) {
+            data = data.slice(3);
+          }
+          try {
+            const received: SlideWindowConfig = JSON.parse(data);
+            console.log("Received window config:", received);
+            setWindowType(received.WindowType);
+            setWindowSize(received.WindowSize);
+            setSlideSize(received.SlideSize);
+          } catch {
+            if (event.data) console.log("Received non-JSON data:", event.data);
+          }
         }
-      }
+      };
+
+      connection.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+
+      connection.onclose = () => {
+        console.log("WebSocket disconnected");
+        if (is_connected && !reconnectInterval) {
+          reconnectInterval = setInterval(() => {
+            console.log("Attempting to reconnect...");
+            connectWebSocket();
+          }, 5000); // 5秒ごとに再接続を試みる
+        }
+      };
     };
 
-    connection.onerror = (error) => {
-      console.error("WebSocket error:", error);
-    };
+    if (is_connected) {
+      connectWebSocket();
+    }
 
     return () => {
-      connection.close();
+      if (connection) connection.close();
+      if (reconnectInterval) clearInterval(reconnectInterval);
     };
-  }, []);
+  }, [is_connected]);
 
   return (
     <div className="App">
       <h1>課題 4</h1>
       <div
         style={{
-          // padding: "16px",
           display: "flex",
           justifyContent: "right",
         }}
@@ -93,6 +108,17 @@ function App() {
       <div style={{ display: "flex" }}>
         <div style={{ flex: 3, paddingRight: "16px" }}>
           <h2>Windowデータ</h2>
+          <ToggleButton
+            id="toggle-connection"
+            type="checkbox"
+            variant="outline-primary"
+            checked={is_connected}
+            value="1"
+            onChange={(e) => setIsConnected(e.currentTarget.checked)}
+            className="mb-2"
+          >
+            {is_connected ? "接続中" : "接続"}
+          </ToggleButton>
           <StockTable data={stockData} />
         </div>
         <div
@@ -119,7 +145,6 @@ function App() {
             {checked && (
               <div>
                 <h3>集計データ</h3>
-
                 <div
                   style={{
                     maxWidth: "80%",

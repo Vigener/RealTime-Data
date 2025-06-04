@@ -89,46 +89,23 @@ public class Client {
             return new StockRow(stock, open, high, low, close, time, timestamp);
         });
 
-        // if (windowType == WindowType.Count) {
-        //     mappedStream
-        //         .keyBy(stockRow -> stockRow.getStock())
-        //         .countWindow(windowSize, slideSize)
-        //         .aggregate(
-        //             new StockAggregationFunction(),
-        //             new StockWindowProcess()
-        //         )
-        //         .print();
-        //     // カウントウィンドウを適用
-        // } else if (windowType == WindowType.Time) {
-        //     // タイムウィンドウを適用
-        //     mappedStream
-        //         .keyBy(stockRow -> stockRow.getStock())
-        //         .window(
-        //             SlidingProcessingTimeWindows.of(Duration.ofSeconds(windowSize), Duration.ofSeconds(slideSize))
-        //         )
-        //         .aggregate(new StockAggregationFunction(), new StockWindowProcess())
-        //         .print();
-        // }
         if (args[0].equals("-count")) {
             mappedStream
                 .countWindowAll(Integer.parseInt(args[1]), Integer.parseInt(args[2]))
-                .process(new StockWindowFunction())
-                .print();
+                .process(new StockCountWindowFunction())  // Count専用クラス
+                .addSink(new StockRichSinkFunction("localhost", 3000));  // ソケットに送信
         } else if (args[0].equals("-time")) {
             mappedStream
                 .windowAll(SlidingProcessingTimeWindows.of(
                     Duration.ofSeconds(Integer.parseInt(args[1])),
                     Duration.ofSeconds(Integer.parseInt(args[2]))
                 ))
-                .aggregate(new StockAllCollectingAggregationFunction(), new StockAllDetailWindowProcess())
-                .print();
+                .process(new StockTimeWindowFunction())  // Time専用クラス
+                .addSink(new StockRichSinkFunction("localhost", 3000));  // ソケットに送信
+
         } else {
             exitWithUsage();
         }
-
-        // データをターミナルに表示
-
-        // mappedStream.print();
 
         // Flinkジョブを開始
         env.execute("Stock Close Value Aggregation");

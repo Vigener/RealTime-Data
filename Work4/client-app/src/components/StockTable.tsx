@@ -3,6 +3,9 @@ import { Table, ToggleButton } from "react-bootstrap";
 import type { StockProps } from "../DataType";
 
 function StockTable({ StockData }: StockProps) {
+  if (!StockData || StockData.length === 0) {
+    return <div>No data available</div>; // データがない場合の表示
+  }
   const [showAll, setShowAll] = useState(true);
   const maxHeight = 900; // px, 最大高さ
 

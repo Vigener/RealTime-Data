@@ -1,6 +1,9 @@
 package work4;
-import java.io.*;
-import java.net.*;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
+import java.io.IOException;
+import java.net.Socket;
 import java.text.DecimalFormat;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -24,6 +27,7 @@ public class Client {
         // 例: java Client time 5 1
 
         // 引数の数を確認
+        System.out.println("Number of arguments: " + args.length);
         if (args.length != 3) {
             System.out.println("Usage: java Client -<count[c,Count]/time[t,Time]> <Window size> <Slide size>");
             return;
