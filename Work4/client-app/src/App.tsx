@@ -23,7 +23,7 @@ function App() {
 
   useEffect(() => {
     let connection: WebSocket | null = null;
-    let reconnectInterval: NodeJS.Timeout | null = null;
+    let reconnectInterval: ReturnType<typeof setInterval> | null = null;
 
     const connectWebSocket = () => {
       connection = new WebSocket("ws://localhost:3000");
