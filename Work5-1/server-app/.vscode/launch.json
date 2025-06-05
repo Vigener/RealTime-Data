@@ -6,13 +6,14 @@
             "name": "Server_Extended",
             "request": "launch",
             "mainClass": "io.github.vgnri.client.Server_Extended",
-            "projectName": "Client"
+            "projectName": "server-app"
         },
         {
             "type": "java",
-            "name": "Launch Client",
+            "name": "Client",
             "request": "launch",
             "mainClass": "io.github.vgnri.client.Client",
+            "projectName": "server-app",
             "args": "${input:clientArgs}"
         }
     ],

@@ -101,23 +101,33 @@ public class Client {
             return new StockRow(stock, open, high, low, close, time, timestamp);
         });
 
+        DataStream<String> outputStream = null;
+
         if (args[0].equals("-count")) {
-            mappedStream
+            outputStream = mappedStream
                 .countWindowAll(Integer.parseInt(args[1]), Integer.parseInt(args[2]))
-                .process(new StockCountWindowFunction())  // Count専用クラス
-                .addSink(new StockRichSinkFunction("localhost", 3000)); // WebSocketに送信
+                .process(new StockCountWindowFunction());  // Count専用クラス
+                // .addSink(new StockRichSinkFunction("localhost", 3000)); // WebSocketに送信
                 // .print(); // こちらは動く
         } else if (args[0].equals("-time")) {
-            mappedStream
+            outputStream = mappedStream
                 .windowAll(SlidingProcessingTimeWindows.of(
                     Duration.ofSeconds(Integer.parseInt(args[1])),
                     Duration.ofSeconds(Integer.parseInt(args[2]))
                 ))
-                .process(new StockTimeWindowFunction())  // Time専用クラス
-                .addSink(new StockRichSinkFunction("localhost", 3000));  // WebSocketに送信
+                    .process(new StockTimeWindowFunction());  // Time専用クラス
+                // .addSink(new StockRichSinkFunction("localhost", 3000));  // WebSocketに送信
                 // .print(); // こちらは動く
         } else {
             exitWithUsage();
+        }
+
+        if (outputStream != null) {
+            // outputStream.print();
+            outputStream.addSink(new StockRichSinkFunction("localhost", 3000)); // WebSocketに送信
+        } else {
+            System.err.println("Error: outputStream is null. Please check the arguments.");
+            System.exit(1);
         }
 
         // Flinkジョブを開始
