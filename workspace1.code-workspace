@@ -4,10 +4,10 @@
 			"path": "Copy/frauddetection"
 		},
 		{
-			"path": "Work5-1/Client"
+			"path": "Work5-1/client-app"
 		},
 		{
-			"path": "Work4"
+			"path": "Work5-1/server-app"
 		}
 	],
 	"settings": {
