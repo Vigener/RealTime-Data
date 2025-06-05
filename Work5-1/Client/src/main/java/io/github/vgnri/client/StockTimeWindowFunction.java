@@ -87,7 +87,7 @@ public class StockTimeWindowFunction extends ProcessAllWindowFunction<StockRow, 
             result.append(",");
             }
         }
-        result.append("]");
+        result.append("]}");
         
         // 1つの文字列として出力
         out.collect(result.toString());
