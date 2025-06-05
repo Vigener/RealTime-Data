@@ -1,6 +1,6 @@
 package io.github.vgnri.client;
 
-import org.apache.flink.configuration.Configuration; // 正しいインポート
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.sink.legacy.RichSinkFunction;
 
 public class StockRichSinkFunction extends RichSinkFunction<String> {
@@ -13,7 +13,8 @@ public class StockRichSinkFunction extends RichSinkFunction<String> {
         this.port = port;
     }
 
-    public void open(Configuration parameters) throws Exception {
+    @Override
+    public void open(OpenContext context) throws Exception {
         // WebSocketサーバーのインスタンスを取得
         server = StockWebSocketServer.getInstance(host, port);
         System.out.println("StockRichSinkFunction initialized with WebSocket server");

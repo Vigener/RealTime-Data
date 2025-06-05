@@ -16,24 +16,20 @@ function App() {
   const [stockData, setStockData] = useState<Stock[]>([]);
   const [aggregationData, setAggregationData] = useState<AggResult[]>([]);
   const [checked, setChecked] = useState(false);
-  const [is_connected, setIsConnected] = useState(false);
+  const [is_trying_connect, setIsTryingConnect] = useState(false);
   const [windowType, setWindowType] = useState<WindowType>();
   const [windowSize, setWindowSize] = useState<number>();
   const [slideSize, setSlideSize] = useState<number>();
 
+
   useEffect(() => {
     let connection: WebSocket | null = null;
-    let reconnectInterval: ReturnType<typeof setInterval> | null = null;
 
     const connectWebSocket = () => {
       connection = new WebSocket("ws://localhost:3000");
 
       connection.onopen = () => {
         console.log("WebSocket connected");
-        if (reconnectInterval) {
-          clearInterval(reconnectInterval); // 再接続の試行を停止
-          reconnectInterval = null;
-        }
       };
 
       connection.onmessage = (event) => {
@@ -61,28 +57,23 @@ function App() {
 
       connection.onerror = (error) => {
         console.error("WebSocket error:", error);
+        alert("WebSocket接続に失敗しました。");
+        setIsTryingConnect(false); // 接続失敗時にフラグをリセット
       };
 
       connection.onclose = () => {
         console.log("WebSocket disconnected");
-        if (is_connected && !reconnectInterval) {
-          reconnectInterval = setInterval(() => {
-            console.log("Attempting to reconnect...");
-            connectWebSocket();
-          }, 5000); // 5秒ごとに再接続を試みる
-        }
       };
     };
 
-    if (is_connected) {
+    if (is_trying_connect) {
       connectWebSocket();
     }
 
     return () => {
       if (connection) connection.close();
-      if (reconnectInterval) clearInterval(reconnectInterval);
     };
-  }, [is_connected]);
+  }, [is_trying_connect]);
 
   return (
     <div className="App">
@@ -112,14 +103,14 @@ function App() {
             id="toggle-connection"
             type="checkbox"
             variant="outline-primary"
-            checked={is_connected}
+            checked={is_trying_connect}
             value="1"
-            onChange={(e) => setIsConnected(e.currentTarget.checked)}
+            onChange={(e) => setIsTryingConnect(e.currentTarget.checked)}
             className="mb-2"
           >
-            {is_connected ? "接続中" : "接続"}
+            {is_trying_connect ? "接続中" : "接続"}
           </ToggleButton>
-          <StockTable data={stockData} />
+          <StockTable StockData={stockData} />
         </div>
         <div
           style={{
@@ -151,7 +142,7 @@ function App() {
                     margin: "0 auto",
                   }}
                 >
-                  <AggregationTable data={aggregationData} />
+                  <AggregationTable receivedData={aggregationData} />
                 </div>
               </div>
             )}
