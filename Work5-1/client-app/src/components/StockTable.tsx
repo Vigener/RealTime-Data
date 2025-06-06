@@ -25,6 +25,10 @@ function StockTable({ StockData }: StockProps) {
           </ToggleButton>
         </div>
       )}
+      <div id="size-of-stock-table">
+        <strong>データ数: </strong>
+        {StockData.length} 
+      </div>
       <div
         style={
           showAll
@@ -49,9 +53,10 @@ function StockTable({ StockData }: StockProps) {
             <tr>
               <th>stock</th>
               <th>open</th>
-              <th>max</th>
-              <th>min</th>
+              <th>high</th>
+              <th>low</th>
               <th>close</th>
+              <th>timestamp</th>
             </tr>
           </thead>
           <tbody>
@@ -59,9 +64,10 @@ function StockTable({ StockData }: StockProps) {
               <tr key={idx}>
                 <td>{row.stock}</td>
                 <td>{row.open}</td>
-                <td>{row.max}</td>
-                <td>{row.min}</td>
+                <td>{row.high}</td>
+                <td>{row.low}</td>
                 <td>{row.close}</td>
+                <td>{row.timestamp}</td>
               </tr>
             ))}
           </tbody>

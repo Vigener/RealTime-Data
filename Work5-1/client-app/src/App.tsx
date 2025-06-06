@@ -13,14 +13,18 @@ import type {
 } from "./DataType";
 
 function App() {
-  const [stockData, setStockData] = useState<Stock[]>([]);
-  const [aggregationData, setAggregationData] = useState<AggResult[]>([]);
+  
   const [checked, setChecked] = useState(false);
   const [is_trying_connect, setIsTryingConnect] = useState(false);
+  
   const [windowType, setWindowType] = useState<WindowType>();
-  const [windowSize, setWindowSize] = useState<number>();
-  const [slideSize, setSlideSize] = useState<number>();
-
+  const [windowSize, setWindowSize] = useState<number>(0);
+  const [slideSize, setSlideSize] = useState<number>(0);
+  
+  const [stockData, setStockData] = useState<Stock[]>([]);
+  const [aggregationData, setAggregationData] = useState<AggResult[]>([]);
+  const [windowStart, setWindowStart] = useState<string>("");
+  const [windowEnd, setWindowEnd] = useState<string>("");
 
   useEffect(() => {
     let connection: WebSocket | null = null;
@@ -37,6 +41,8 @@ function App() {
           const received: ReceivedData = JSON.parse(event.data);
           setStockData(received.WindowRecords || []);
           setAggregationData(received.AggregationResults || []);
+          setWindowStart(received.WindowStart || "");
+          setWindowEnd(received.WindowEnd || "");
           console.log("Received data:", received);
         } catch {
           let data = event.data;
@@ -63,6 +69,7 @@ function App() {
 
       connection.onclose = () => {
         console.log("WebSocket disconnected");
+        setIsTryingConnect(false); // 接続が閉じられたときにフラグをリセット
       };
     };
 
@@ -86,13 +93,21 @@ function App() {
       >
         <div style={{ display: "flex", gap: "16px" }}>
           <div>
-            <strong>Window Type: </strong> {windowType}
-          </div>
-          <div>
-            <strong>Window Size: </strong> {windowSize}
-          </div>
-          <div>
-            <strong>Slide Size: </strong> {slideSize}
+            {(windowType !== undefined) && (
+              <div>
+                <strong>Window Type: </strong> {windowType}
+              </div>
+            )}
+            {(windowSize !== 0) && (
+              <div>
+                <strong>Window Size: </strong> {windowSize}
+              </div>
+            )}
+            {(slideSize !== 0) && (
+              <div>
+                <strong>Slide Size: </strong> {slideSize}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -110,6 +125,16 @@ function App() {
           >
             {is_trying_connect ? "接続中" : "接続"}
           </ToggleButton>
+          {(windowStart || windowEnd) && (
+            <div>
+              <div>
+                <strong>Window Start: </strong> {windowStart}
+              </div>
+              <div>
+                <strong>Window End: </strong> {windowEnd}
+              </div>
+            </div>
+          )}
           <StockTable StockData={stockData} />
         </div>
         <div

@@ -44,9 +44,12 @@ public class StockTimeWindowFunction extends ProcessAllWindowFunction<StockRow, 
         // result.append(String.format("Window: [%s - %s]\n", windowStartStr, windowEndStr));
         // result.append(String.format("Total records in window: %d\n", windowData.size()));
         // result.append(String.format("Number of different stocks: %d\n", stockGroups.size()));
+        result.append("{");
+        result.append("\"WindowStart\": \"").append(windowStartStr).append("\",");
+        result.append("\"WindowEnd\": \"").append(windowEndStr).append("\",");
 
         // JSON形式でWindow内のStockRowを出力
-        result.append("{ \"WindowRecords\": [");
+        result.append("\"WindowRecords\": [");
         for (int i = 0; i < windowData.size(); i++) {
             StockRow stockRow = windowData.get(i);
             result.append("{");
@@ -55,7 +58,7 @@ public class StockTimeWindowFunction extends ProcessAllWindowFunction<StockRow, 
             result.append(", \"high\": ").append(stockRow.getHigh());
             result.append(", \"low\": ").append(stockRow.getLow());
             result.append(", \"close\": ").append(stockRow.getClose());
-            result.append(", \"timestamp\": ").append(stockRow.getTimestamp());
+            result.append(", \"timestamp\": \"").append(stockRow.getTimestamp()).append("\"");
             result.append("}");
             if (i < windowData.size() - 1) {
             result.append(",");
@@ -63,12 +66,16 @@ public class StockTimeWindowFunction extends ProcessAllWindowFunction<StockRow, 
         }
         result.append("],");
         
-        result.append("\"AggregateRecords\": [");
+        result.append("\"AggregationResults\": [");
         int groupCount = 0;
         int groupSize = stockGroups.size();
-        for (Map.Entry<String, List<StockRow>> entry : stockGroups.entrySet()) {
-            String stock = entry.getKey();
-            List<StockRow> stockRows = entry.getValue();
+
+        // AからZの順にソート
+        List<String> sortedStocks = new ArrayList<>(stockGroups.keySet());
+        sortedStocks.sort(String::compareTo);
+
+        for (String stock : sortedStocks) {
+            List<StockRow> stockRows = stockGroups.get(stock);
 
             // 統計計算
             StockStats stats = new StockStats();

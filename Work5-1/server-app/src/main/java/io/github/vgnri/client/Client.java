@@ -15,50 +15,50 @@ public class Client {
         System.exit(1);
     }
 
-    private enum WindowType {
-        Count,
-        Time
-    }
+    // private enum WindowType {
+    //     Count,
+    //     Time
+    // }
 
-    private static class WindowConfig {
-        int windowSize = 10; // デフォルトのウィンドウサイズ
-        int slideSize = 5; // デフォルトのスライドサイズ
-        WindowType windowType = WindowType.Count; // デフォルトのウィンドウタイプ
+    // private static class WindowConfig {
+    //     int windowSize = 10; // デフォルトのウィンドウサイズ
+    //     int slideSize = 5; // デフォルトのスライドサイズ
+    //     WindowType windowType = WindowType.Count; // デフォルトのウィンドウタイプ
 
-        public WindowConfig(int windowSize, int slideSize, WindowType windowType) {
-            this.windowSize = windowSize;
-            this.slideSize = slideSize;
-            this.windowType = windowType;
-        }
-    }
+    //     public WindowConfig(int windowSize, int slideSize, WindowType windowType) {
+    //         this.windowSize = windowSize;
+    //         this.slideSize = slideSize;
+    //         this.windowType = windowType;
+    //     }
+    // }
 
     // コマンドライン引数をパースする静的メソッド
-    private static WindowConfig parseArgs(String[] args) {
-        if (args.length < 3) {
-            exitWithUsage();
-        }
+    // private static WindowConfig parseArgs(String[] args) {
+    //     if (args.length < 3) {
+    //         exitWithUsage();
+    //     }
 
-        WindowType windowType;
-        if (args[0].equals("-count")) {
-            windowType = WindowType.Count;
-        } else if (args[0].equals("-time")) {
-            windowType = WindowType.Time;
-        } else {
-            exitWithUsage();
-            return null; // Unreachable, but required for compilation
-        }
+    //     WindowType windowType;
+    //     if (args[0].equals("-count")) {
+    //         windowType = WindowType.Count;
+    //     } else if (args[0].equals("-time")) {
+    //         windowType = WindowType.Time;
+    //     } else {
+    //         exitWithUsage();
+    //         return null; // Unreachable, but required for compilation
+    //     }
 
-        int windowSize, slideSize;
-        try {
-            windowSize = Integer.parseInt(args[1]);
-            slideSize = Integer.parseInt(args[2]);
-        } catch (NumberFormatException e) {
-            exitWithUsage();
-            return null; // Unreachable, but required for compilation
-        }
+    //     int windowSize, slideSize;
+    //     try {
+    //         windowSize = Integer.parseInt(args[1]);
+    //         slideSize = Integer.parseInt(args[2]);
+    //     } catch (NumberFormatException e) {
+    //         exitWithUsage();
+    //         return null; // Unreachable, but required for compilation
+    //     }
 
-        return new WindowConfig(windowSize, slideSize, windowType);
-    }
+    //     return new WindowConfig(windowSize, slideSize, windowType);
+    // }
 
     public static void main(String[] args) throws Exception {
         // --- WebSocketサーバーを事前に起動 ---

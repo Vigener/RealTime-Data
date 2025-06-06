@@ -1,7 +1,6 @@
 package io.github.vgnri.client;
 
 import java.net.InetSocketAddress;
-
 import java.nio.ByteBuffer;
 import java.util.concurrent.CopyOnWriteArraySet;
 
@@ -19,7 +18,7 @@ public class StockWebSocketServer extends WebSocketServer {
 
     public static synchronized StockWebSocketServer getInstance(String host, int port) {
         if (instance == null) {
-            instance = new StockWebSocketServer(new InetSocketAddress(host, port));
+            instance = new StockWebSocketServer(new InetSocketAddress(port));
         }
         return instance;
     }

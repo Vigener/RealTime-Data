@@ -17,15 +17,23 @@
             "args": "${input:clientArgs}"
         }
     ],
+    // "inputs": [
+    //     {
+    //         "id": "clientArgs",
+    //         "type": "pickString",
+    //         "description": "Select arguments for the Client",
+    //         "options": [
+    //             "-count 20 10",
+    //             "-time 5 3"
+    //         ]
+    //     }
+    // ],
     "inputs": [
-        {
-            "id": "clientArgs",
-            "type": "pickString",
-            "description": "Select arguments for the Client",
-            "options": [
-                "-count 20 10",
-                "-time 5 3"
-            ]
-        }
-    ]
+    {
+        "id": "clientArgs",
+        "type": "promptString",
+        "description": "クライアントの引数を入力してください（例: -count 20 10 または -time 5 3）",
+        "default": "-count 20 10"
+    }
+]
 }

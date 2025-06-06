@@ -1,9 +1,10 @@
 export type Stock = {
   stock: string;
   open: number;
-  max: number;
-  min: number;
+  high: number;
+  low: number;
   close: number;
+  timestamp: string;
 };
 
 export type StockProps = {
@@ -25,6 +26,8 @@ export type AggProps = {
 export type ReceivedData = {
   WindowRecords: Stock[];
   AggregationResults: AggResult[];
+  WindowStart: string;
+  WindowEnd: string;
 };
 
 export type WindowType = "Count" | "Time";

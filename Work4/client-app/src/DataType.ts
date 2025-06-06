@@ -1,9 +1,10 @@
 export type Stock = {
   stock: string;
   open: number;
-  max: number;
-  min: number;
+  high: number;
+  low: number;
   close: number;
+  timestamp: string;
 };
 
 export type StockProps = {
