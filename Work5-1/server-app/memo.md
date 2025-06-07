@@ -26,3 +26,4 @@
       { "WindowRecords": [{"stock": "株F", "open": 257.71, "high": 278.06, "low": 238.07, "close": 277.08, "timestamp": 16:43:54.68},{"stock": "株U", "open": 251.02, "high": 265.39, "low": 185.46, "close": 192.27, "timestamp": 16:43:55.18},{"stock": "株E", "open": 66.9, "high": 84.61, "low": 60.77, "close": 62.5, "timestamp": 16:43:55.68}],"AggregateRecords": [{"stock": "株F", "Ave": 277.08, "Max": 277.08, "Min": 277.08, "Std": 0.00},{"stock": "株E", "Ave": 62.50, "Max": 62.50, "Min": 62.50, "Std": 0.00},{"stock": "株U", "Ave": 192.27, "Max": 192.27, "Min": 192.27, "Std": 0.00}]}
       ```
   - Countウィンドウ側は、ターミナルで見やすいような集計結果の表示方法をしている。
+

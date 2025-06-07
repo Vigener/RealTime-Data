@@ -106,7 +106,7 @@ public class Client {
         if (args[0].equals("-count")) {
             outputStream = mappedStream
                 .countWindowAll(Integer.parseInt(args[1]), Integer.parseInt(args[2]))
-                .process(new StockCountWindowFunction());  // Count専用クラス
+                .process(new StockWindowFunction_CountGson());  // Count専用クラス
                 // .addSink(new StockRichSinkFunction("localhost", 3000)); // WebSocketに送信
                 // .print(); // こちらは動く
         } else if (args[0].equals("-time")) {
