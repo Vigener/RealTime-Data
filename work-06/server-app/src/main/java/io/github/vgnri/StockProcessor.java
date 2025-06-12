@@ -1,5 +1,7 @@
 package io.github.vgnri;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.net.Socket;
@@ -18,8 +20,27 @@ public class StockProcessor {
     private static final ConcurrentHashMap<Integer, Double> stockPriceMap = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Integer, Integer> transactionCountMap = new ConcurrentHashMap<>();
 
+    // --- 追加: メタデータ・管理構造 ---
+    // 銘柄ID -> 銘柄情報
+    private static final ConcurrentHashMap<Integer, StockInfo> StockMetadata = new ConcurrentHashMap<>();
+    // 株主ID -> 株主情報
+    private static final ConcurrentHashMap<Integer, ShareholderInfo> ShareholderMetadata = new ConcurrentHashMap<>();
+    // 株主ID -> ポートフォリオ
+    private static final ConcurrentHashMap<Integer, Portfolio> PortfolioManager = new ConcurrentHashMap<>();
+    // 取引履歴（時系列）
+    private static final List<Transaction> TransactionHistory = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
     public static void main(String[] args) {
         System.out.println("StockProcessor を開始します...");
+
+        // メタデータの読み込み
+        loadStockMetadata(Config.STOCK_META_CSV_PATH);
+        loadShareholderMetadata(Config.SHAREHOLDER_CSV_PATH);
+
+        // 表示
+        System.out.println("登録銘柄数: " + StockMetadata.size());
+        System.out.println("登録株主数: " + ShareholderMetadata.size());
+
         
         // スレッドプールを作成
         ExecutorService executor = Executors.newFixedThreadPool(3);
@@ -76,6 +97,11 @@ public class StockProcessor {
                             // 取引回数を集計
                             for (Transaction transaction : transactions) {
                                 transactionCountMap.merge(transaction.getStockId(), 1, Integer::sum);
+                                // --- 追加: 取引履歴に追加 ---
+                                TransactionHistory.add(transaction);
+                                // --- 追加: ポートフォリオ更新（例: 簡易実装） ---
+                                // PortfolioManager.computeIfAbsent(transaction.getShareholderId(), k -> new Portfolio())
+                                //     .updateWithTransaction(transaction);
                             }
                             
                             System.out.println("Transaction受信: " + transactions.size() + " 件");
@@ -122,6 +148,86 @@ public class StockProcessor {
         }
     }
     
+    // 株メタデータをCSVファイルから読み込む
+    private static void loadStockMetadata(String csvFilePath) {
+        System.out.println("株メタデータを読み込み中: " + csvFilePath);
+        
+        try (BufferedReader reader = new BufferedReader(new FileReader(csvFilePath))) {
+            String line;
+            int lineNumber = 0;
+            
+            while ((line = reader.readLine()) != null) {
+                lineNumber++;
+                
+                // ヘッダ行をスキップ
+                if (lineNumber == 1) {
+                    System.out.println("ヘッダ: " + line);
+                    continue;
+                }
+                
+                // 空行をスキップ
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+                
+                try {
+                    StockInfo stockInfo = StockInfo.fromCsvLine(line);
+                    StockMetadata.put(stockInfo.getStockId(), stockInfo);
+                    System.out.println("読み込み完了: " + stockInfo.getStockName() + " (ID: " + stockInfo.getStockId() + ")");
+                } catch (Exception e) {
+                    System.err.println("行 " + lineNumber + " の解析に失敗: " + line);
+                    System.err.println("エラー: " + e.getMessage());
+                }
+            }
+            
+            System.out.println("株メタデータ読み込み完了: " + StockMetadata.size() + " 件");
+            
+        } catch (Exception e) {
+            System.err.println("CSVファイルの読み込みに失敗: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+        // 株主メタデータをCSVファイルから読み込む
+    private static void loadShareholderMetadata(String csvFilePath) {
+        System.out.println("株主メタデータを読み込み中: " + csvFilePath);
+        
+        try (BufferedReader reader = new BufferedReader(new FileReader(csvFilePath))) {
+            String line;
+            int lineNumber = 0;
+            
+            while ((line = reader.readLine()) != null) {
+                lineNumber++;
+                
+                // ヘッダ行をスキップ
+                if (lineNumber == 1) {
+                    System.out.println("ヘッダ: " + line);
+                    continue;
+                }
+                
+                // 空行をスキップ
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+                
+                try {
+                    ShareholderInfo shareholderInfo = ShareholderInfo.fromCsvLine(line);
+                    ShareholderMetadata.put(shareholderInfo.getShareholderId(), shareholderInfo);
+                    System.out.println("読み込み完了: " + shareholderInfo.getShareholderName() + " (ID: " + shareholderInfo.getShareholderId() + ")");
+                } catch (Exception e) {
+                    System.err.println("行 " + lineNumber + " の解析に失敗: " + line);
+                    System.err.println("エラー: " + e.getMessage());
+                }
+            }
+            
+            System.out.println("株主メタデータ読み込み完了: " + ShareholderMetadata.size() + " 件");
+            
+        } catch (Exception e) {
+            System.err.println("CSVファイルの読み込みに失敗: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
     // データ分析メソッド
     private static void performAnalysis() {
         List<StockPrice> currentPrices = latestStockPrices.get();
@@ -133,6 +239,10 @@ public class StockProcessor {
             System.out.println("最新取引数: " + currentTransactions.size());
             System.out.println("監視銘柄数: " + stockPriceMap.size());
             System.out.println("取引された銘柄数: " + transactionCountMap.size());
+            // System.out.println("登録銘柄数: " + StockMetadata.size());
+            // System.out.println("登録株主数: " + ShareholderMetadata.size());
+            System.out.println("ポートフォリオ管理数: " + PortfolioManager.size());
+            System.out.println("取引履歴件数: " + TransactionHistory.size());
             
             // より詳細な分析をここに追加
             performDetailedAnalysis();
@@ -143,14 +253,43 @@ public class StockProcessor {
     private static void performDetailedAnalysis() {
         // 例：最も取引が多い銘柄
         transactionCountMap.entrySet().stream()
-            .max((e1, e2) -> Integer.compare(e1.getValue(), e2.getValue()))
-            .ifPresent(entry -> 
-                System.out.println("最多取引銘柄: ID=" + entry.getKey() + ", 取引数=" + entry.getValue()));
-        
+                .max((e1, e2) -> Integer.compare(e1.getValue(), e2.getValue()))
+                .ifPresent(entry -> {
+                    System.out.println("最多取引銘柄: ID=" + entry.getKey() + ", 取引数=" + entry.getValue());
+                    // 銘柄名も表示
+                    StockInfo stockInfo = StockMetadata.get(entry.getKey());
+                    if (stockInfo != null) {
+                        System.out.println("  銘柄名: " + stockInfo.getStockName());
+                    }
+                });
+
         // 例：最高価格の銘柄
         stockPriceMap.entrySet().stream()
-            .max((e1, e2) -> Double.compare(e1.getValue(), e2.getValue()))
-            .ifPresent(entry -> 
-                System.out.println("最高価格銘柄: ID=" + entry.getKey() + ", 価格=" + entry.getValue()));
+                .max((e1, e2) -> Double.compare(e1.getValue(), e2.getValue()))
+                .ifPresent(entry -> {
+                    System.out.println("最高価格銘柄: ID=" + entry.getKey() + ", 価格=" + entry.getValue());
+                    // 銘柄名も表示
+                    StockInfo stockInfo = StockMetadata.get(entry.getKey());
+                    if (stockInfo != null) {
+                        System.out.println("  銘柄名: " + stockInfo.getStockName());
+                    }
+                });
+        
+        // 例：株主統計
+        if (!ShareholderMetadata.isEmpty()) {
+            long maleCount = ShareholderMetadata.values().stream()
+                    .mapToInt(sh -> sh.getGender() == ShareholderInfo.Gender.MALE ? 1 : 0)
+                    .sum();
+            long femaleCount = ShareholderMetadata.size() - maleCount;
+            
+            System.out.println("株主性別統計: 男性=" + maleCount + "名, 女性=" + femaleCount + "名");
+            
+            // 平均年齢
+            double averageAge = ShareholderMetadata.values().stream()
+                    .mapToInt(ShareholderInfo::getAge)
+                    .average()
+                    .orElse(0.0);
+            System.out.println("株主平均年齢: " + String.format("%.1f", averageAge) + "歳");
+        }
     }
 }
