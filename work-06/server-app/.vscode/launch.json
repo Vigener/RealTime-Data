@@ -1,0 +1,18 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Transaction",
+            "request": "launch",
+            "mainClass": "io.github.vgnri.Transaction",
+            "projectName": "server-app_7b34cdbd"
+        },
+        {
+            "type": "java",
+            "name": "StockPrice",
+            "request": "launch",
+            "mainClass": "io.github.vgnri.StockPrice",
+            "projectName": "server-app_7b34cdbd"
+        }
+    ]
+}
