@@ -3,6 +3,10 @@ package io.github.vgnri;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -10,11 +14,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-public class StockPrice {
+public class StockPrice implements Serializable {
+    private static final long serialVersionUID = 1L;
+    
     private int stockId;
     private double price;
     private LocalTime timestamp;
@@ -27,6 +35,14 @@ public class StockPrice {
     private static Random random = new Random();
     private static ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private static List<StockPriceUpdateListener> listeners = new ArrayList<>();
+    
+    // Socket通信用
+    private static ServerSocket serverSocket;
+    private static List<ObjectOutputStream> clientOutputStreams = new CopyOnWriteArrayList<>();
+    
+    // スケジューラー制御用
+    private static ScheduledFuture<?> updateTask;
+    private static boolean isUpdateRunning = false;
     
     // 株IDのリストを保持（順序管理用）
     private static List<Integer> stockIdList = new ArrayList<>();
@@ -184,6 +200,40 @@ public class StockPrice {
         }, 0, intervalMs, TimeUnit.MILLISECONDS);
     }
     
+    // 株価更新の開始/停止を制御
+    private static void checkAndControlUpdates() {
+        boolean hasClients = !clientOutputStreams.isEmpty();
+        
+        if (hasClients && !isUpdateRunning) {
+            // クライアントがいて、更新が停止中の場合は開始
+            startPriceUpdatesInternal();
+            System.out.println("クライアント接続を検出しました。株価更新を開始します。");
+        } else if (!hasClients && isUpdateRunning) {
+            // クライアントがいなくて、更新が実行中の場合は停止
+            stopPriceUpdatesInternal();
+            System.out.println("全てのクライアントが切断されました。株価更新を停止します。");
+        }
+    }
+    
+    // 内部用：株価更新開始
+    private static void startPriceUpdatesInternal() {
+        if (!isUpdateRunning) {
+            updateTask = scheduler.scheduleAtFixedRate(() -> {
+                updateAllStockPrices();
+            }, 0, Config.PRICE_UPDATE_INTERVAL_MS, TimeUnit.MILLISECONDS);
+            isUpdateRunning = true;
+        }
+    }
+    
+    // 内部用：株価更新停止
+    private static void stopPriceUpdatesInternal() {
+        if (isUpdateRunning && updateTask != null) {
+            updateTask.cancel(false);
+            updateTask = null;
+            isUpdateRunning = false;
+        }
+    }
+    
     // 全株価を更新（CSV読み込み済みの株IDに基づいて処理）
     private static void updateAllStockPrices() {
         LocalTime currentTime = LocalTime.now();
@@ -202,9 +252,109 @@ public class StockPrice {
             }
         }
         
+        // Socket経由でデータを送信
+        sendDataToClients(updatedPrices);
+        
         // リスナーに更新を通知（既にID順になっている）
         for (StockPriceUpdateListener listener : listeners) {
             listener.onPriceUpdate(new ArrayList<>(updatedPrices));
+        }
+    }
+    
+    // クライアントにデータを送信
+    private static void sendDataToClients(List<StockPrice> stockPrices) {
+        if (clientOutputStreams.isEmpty()) {
+            return;
+        }
+        
+        List<ObjectOutputStream> streamsToRemove = new ArrayList<>();
+        
+        for (ObjectOutputStream outputStream : clientOutputStreams) {
+            try {
+                outputStream.writeObject(stockPrices);
+                outputStream.flush();
+            } catch (IOException e) {
+                System.err.println("クライアントへの送信でエラーが発生しました: " + e.getMessage());
+                streamsToRemove.add(outputStream);
+            }
+        }
+        
+        // 切断されたクライアントを削除
+        for (ObjectOutputStream stream : streamsToRemove) {
+            clientOutputStreams.remove(stream);
+            try {
+                stream.close();
+            } catch (IOException e) {
+                // ログに記録（無視）
+            }
+        }
+        
+        if (!streamsToRemove.isEmpty()) {
+            System.out.println("切断されたクライアント数: " + streamsToRemove.size() + 
+                             ", 現在の接続数: " + clientOutputStreams.size());
+            
+            // クライアント数の変化をチェック
+            checkAndControlUpdates();
+        }
+    }
+    
+    // Socketサーバーを開始
+    private static void startSocketServer() {
+        Thread serverThread = new Thread(() -> {
+            try {
+                serverSocket = new ServerSocket(Config.STOCK_PRICE_PORT);
+                System.out.println("StockPrice Socketサーバーが開始されました。ポート: " + Config.STOCK_PRICE_PORT);
+                System.out.println("クライアントの接続を待機中...");
+                
+                while (!serverSocket.isClosed()) {
+                    try {
+                        Socket clientSocket = serverSocket.accept();
+                        System.out.println("新しいクライアントが接続しました: " + clientSocket.getRemoteSocketAddress());
+                        
+                        // クライアント用のOutputStreamを作成
+                        ObjectOutputStream outputStream = new ObjectOutputStream(clientSocket.getOutputStream());
+                        clientOutputStreams.add(outputStream);
+                        
+                        System.out.println("現在の接続クライアント数: " + clientOutputStreams.size());
+                        
+                        // クライアント接続時に更新開始をチェック
+                        checkAndControlUpdates();
+                        
+                    } catch (IOException e) {
+                        if (!serverSocket.isClosed()) {
+                            System.err.println("クライアント接続でエラーが発生しました: " + e.getMessage());
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                System.err.println("Socketサーバーでエラーが発生しました: " + e.getMessage());
+            }
+        });
+        
+        serverThread.setDaemon(true);
+        serverThread.start();
+    }
+    
+    // Socketサーバーを停止
+    private static void stopSocketServer() {
+        try {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close();
+            }
+            
+            // 全クライアント接続を閉じる
+            for (ObjectOutputStream stream : clientOutputStreams) {
+                try {
+                    stream.close();
+                } catch (IOException e) {
+                    // ログに記録（無視）
+                }
+            }
+            clientOutputStreams.clear();
+            
+            System.out.println("Socketサーバーが停止されました");
+        } catch (IOException e) {
+            System.err.println("Socketサーバーの停止でエラーが発生しました: " + e.getMessage());
         }
     }
     
@@ -237,6 +387,7 @@ public class StockPrice {
     
     // スケジューラーを停止
     public static void stopPriceUpdates() {
+        stopPriceUpdatesInternal();
         scheduler.shutdown();
     }
 
@@ -292,34 +443,38 @@ public class StockPrice {
             
             System.out.println("初期化完了: " + stockRanges.size() + "銘柄");
             
-            // 更新リスナーを追加（デモ用）
+            // Socketサーバーを開始
+            startSocketServer();
+            
+            // デバッグ用リスナーを追加（オプション）
             addUpdateListener(updatedPrices -> {
-                System.out.println("株価更新: " + updatedPrices.size() + "銘柄が更新されました");
-                // 最初の5銘柄の価格を表示
-                for (int i = 0; i < Math.min(5, updatedPrices.size()); i++) {
-                    StockPrice price = updatedPrices.get(i);
-                    System.out.printf("  株ID:%d 価格:%.2f 時刻:%s%n", 
-                                    price.getStockId(), price.getPrice(), price.getFormattedTimestamp());
-                }
-                System.out.println("---");
+                System.out.println("株価更新: " + updatedPrices.size() + "銘柄が更新されました " +
+                                 "(クライアント数: " + clientOutputStreams.size() + ")");
             });
             
-            // 株価更新を開始
-            System.out.println(Config.PRICE_UPDATE_INTERVAL_MS + "ms間隔での株価更新を開始します...");
-            startPriceUpdates(Config.PRICE_UPDATE_INTERVAL_MS);
+            System.out.println("株価データ生成準備完了。クライアントの接続を待機中...");
+            System.out.println("停止するにはCtrl+Cを押してください");
             
-            // 5秒間実行
-            Thread.sleep(5000);
+            // シャットダウンフックを追加（Ctrl+C時の適切な終了処理）
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                System.out.println("\n株価更新を停止中...");
+                stopPriceUpdates();
+                stopSocketServer();
+                System.out.println("株価システムが正常に終了しました");
+            }));
             
-            // 停止
-            System.out.println("株価更新を停止します");
-            stopPriceUpdates();
+            // メインスレッドを継続（Ctrl+Cまで実行）
+            Thread.currentThread().join();
             
         } catch (InterruptedException e) {
             System.err.println("プログラムが中断されました: " + e.getMessage());
         } catch (Exception e) {
             System.err.println("エラーが発生しました: " + e.getMessage());
             e.printStackTrace();
+        } finally {
+            // 確実に停止処理を実行
+            stopPriceUpdates();
+            stopSocketServer();
         }
     }
 }

@@ -4,6 +4,11 @@ package io.github.vgnri;
  * プロジェクト全体で使用する設定値を管理するクラス
  */
 public class Config {
+
+    // サーバー関連の設定
+    public static final int STOCK_PRICE_PORT = 2001; // StockPriceデータのポート番号
+    public static final int TRANSACTION_PORT = 2002; // Transactionデータのポート番号
+    
     
     // 株価関連の設定
     public static final int MAX_STOCK_COUNT = 3000;        // 最大銘柄数
@@ -30,7 +35,16 @@ public class Config {
     
 
     // CSVファイルパス
+    // 株価データ
     public static final String STOCK_PRICE_CSV_PATH = "src/main/resources/stock_price_data.csv";
+    // 株メタデータ
+    public static final String STOCK_META_CSV_PATH = "src/main/resources/stock_metadata.csv";
+    // 株主データ
+    public static final String SHAREHOLDER_CSV_PATH = "src/main/resources/shareholder_metadata.csv";
+    // つくば市のデータ
+    public static final String TSUKUBA_CSV_PATH = "src/main/resources/tsukuba_metadata.csv";
+
+
     
     // 現在の銘柄数を取得
     public static int getCurrentStockCount() {

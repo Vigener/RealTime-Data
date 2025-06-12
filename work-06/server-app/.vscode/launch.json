@@ -2,6 +2,13 @@
     "configurations": [
         {
             "type": "java",
+            "name": "StockProcessor",
+            "request": "launch",
+            "mainClass": "io.github.vgnri.StockProcessor",
+            "projectName": "server-app_7b34cdbd"
+        },
+        {
+            "type": "java",
             "name": "Transaction",
             "request": "launch",
             "mainClass": "io.github.vgnri.Transaction",
