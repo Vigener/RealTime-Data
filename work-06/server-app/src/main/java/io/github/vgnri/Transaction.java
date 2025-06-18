@@ -192,7 +192,7 @@ public class Transaction implements Serializable {
                     }
                 }
             } catch (IOException e) {
-                System.err.println("Socketサーバーでエラーが発生しました: " + e.getMessage());
+                System.err.println("Socketサーバーでエラーが発生しうました: " + e.getMessage());
             }
         });
         

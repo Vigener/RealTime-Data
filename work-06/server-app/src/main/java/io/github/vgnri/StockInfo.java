@@ -1,6 +1,6 @@
 package io.github.vgnri;
 
-import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.format.DateTimeFormatter;
 
 public class StockInfo {
@@ -57,8 +57,8 @@ public class StockInfo {
     
     private int stockId;
     private String stockName;
-    private double dividendPerShare;
-    private LocalDate dividendPaymentDate;
+    private int dividendPerShare;
+    private MonthDay dividendPaymentDate;
     private long capitalStock;
     private int employeeCount;
     private CompanyType companyType; // enumに変更
@@ -67,8 +67,8 @@ public class StockInfo {
     // コンストラクタ
     public StockInfo() {}
     
-    public StockInfo(int stockId, String stockName, double dividendPerShare, 
-                     LocalDate dividendPaymentDate, long capitalStock, 
+    public StockInfo(int stockId, String stockName, int dividendPerShare, 
+                     MonthDay dividendPaymentDate, long capitalStock, 
                      int employeeCount, CompanyType companyType, MarketType marketType) {
         this.stockId = stockId;
         this.stockName = stockName;
@@ -90,8 +90,9 @@ public class StockInfo {
         try {
             int stockId = Integer.parseInt(fields[0].trim());
             String stockName = fields[1].trim();
-            double dividendPerShare = Double.parseDouble(fields[2].trim());
-            LocalDate dividendPaymentDate = LocalDate.parse(fields[3].trim(), DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+
+            int dividendPerShare = Integer.parseInt(fields[2].trim());
+            MonthDay dividendPaymentDate = MonthDay.parse(fields[3].trim(), DateTimeFormatter.ofPattern("M月d日"));
             long capitalStock = Long.parseLong(fields[4].trim());
             int employeeCount = Integer.parseInt(fields[5].trim());
             CompanyType companyType = CompanyType.fromString(fields[6].trim());
@@ -125,16 +126,16 @@ public class StockInfo {
     public double getDividendPerShare() {
         return dividendPerShare;
     }
-    
-    public void setDividendPerShare(double dividendPerShare) {
+
+    public void setDividendPerShare(int dividendPerShare) {
         this.dividendPerShare = dividendPerShare;
     }
-    
-    public LocalDate getDividendPaymentDate() {
+
+    public MonthDay getDividendPaymentDate() {
         return dividendPaymentDate;
     }
-    
-    public void setDividendPaymentDate(LocalDate dividendPaymentDate) {
+
+    public void setDividendPaymentDate(MonthDay dividendPaymentDate) {
         this.dividendPaymentDate = dividendPaymentDate;
     }
     
