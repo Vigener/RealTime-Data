@@ -1,0 +1,82 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "compile-java",
+            "type": "shell",
+            "command": "javac",
+            "args": [
+                "-d",
+                "target/classes",
+                "-cp",
+                "src/main/java",
+                "src/main/java/io/github/vgnri/*.java"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/server-app"
+            },
+            "group": "build",
+            "presentation": {
+                "echo": false,
+                "reveal": "silent",
+                "focus": false
+            }
+        },
+        {
+            "label": "start-stockprice",
+            "type": "shell",
+            "command": "java",
+            "args": [
+                "-cp",
+                "target/classes",
+                "io.github.vgnri.StockPrice"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/server-app"
+            },
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new",
+                "showReuseMessage": false
+            },
+            "isBackground": true,
+            "problemMatcher": [],
+            "dependsOn": "compile-java"
+        },
+        {
+            "label": "start-transaction",
+            "type": "shell",
+            "command": "java",
+            "args": [
+                "-cp",
+                "target/classes",
+                "io.github.vgnri.Transaction"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/server-app"
+            },
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new",
+                "showReuseMessage": false
+            },
+            "isBackground": true,
+            "problemMatcher": [],
+            "dependsOn": "compile-java"
+        },
+        {
+            "label": "start-all-services",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "start-stockprice",
+                "start-transaction"
+            ]
+        }
+    ]
+}

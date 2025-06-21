@@ -1,25 +1,65 @@
+// {
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "type": "java",
+//             "name": "StockProcessor",
+//             "request": "launch",
+//             "mainClass": "io.github.vgnri.StockProcessor",
+//             "projectName": "server-app_7b34cdbd"
+//         },
+//         {
+//             "type": "java",
+//             "name": "StockProcessor (with Dependencies)",
+//             "request": "launch",
+//             "mainClass": "io.github.vgnri.StockProcessor",
+//             "projectName": "server-app",
+//             "preLaunchTask": "start-all-services",
+//             "console": "integratedTerminal"
+//         },
+//         {
+//             "type": "java",
+//             "name": "StockPrice",
+//             "request": "launch",
+//             "mainClass": "io.github.vgnri.StockPrice",
+//             "projectName": "server-app",
+//             "console": "integratedTerminal"
+//         },
+//         {
+//             "type": "java",
+//             "name": "Transaction",
+//             "request": "launch",
+//             "mainClass": "io.github.vgnri.Transaction",
+//             "projectName": "server-app",
+//             "console": "integratedTerminal"
+//         }
+//     ]
+// }
+
 {
+    "version": "0.2.0",
     "configurations": [
         {
             "type": "java",
-            "name": "StockProcessor",
+            "name": "RunConfiguration",
             "request": "launch",
-            "mainClass": "io.github.vgnri.StockProcessor",
+            "mainClass": "io.github.vgnri.RunConfiguration",
+            "projectName": ""
+        },
+        {
+            "type": "java",
+            "name": "RunConfiguration",
+            "request": "launch",
+            "mainClass": "io.github.vgnri.RunConfiguration",
             "projectName": "server-app_7b34cdbd"
         },
         {
             "type": "java",
-            "name": "Transaction",
+            "name": "Stock Analysis System",
             "request": "launch",
-            "mainClass": "io.github.vgnri.Transaction",
-            "projectName": "server-app_7b34cdbd"
-        },
-        {
-            "type": "java",
-            "name": "StockPrice",
-            "request": "launch",
-            "mainClass": "io.github.vgnri.StockPrice",
-            "projectName": "server-app_7b34cdbd"
+            "mainClass": "io.github.vgnri.RunConfiguration",
+            "projectName": "server-app",
+            "console": "integratedTerminal"
         }
     ]
 }

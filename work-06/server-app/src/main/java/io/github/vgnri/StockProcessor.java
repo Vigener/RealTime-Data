@@ -9,7 +9,8 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicReference; 
+import com.google.gson.Gson;
 
 public class StockProcessor {
     // 最新データを格納する共有データ構造（スレッドセーフ）
@@ -20,7 +21,7 @@ public class StockProcessor {
     private static final ConcurrentHashMap<Integer, Double> stockPriceMap = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Integer, Integer> transactionCountMap = new ConcurrentHashMap<>();
 
-    // --- 追加: メタデータ・管理構造 ---
+    // メタデータ・管理構造 ---
     // 銘柄ID -> 銘柄情報
     private static final ConcurrentHashMap<Integer, StockInfo> StockMetadata = new ConcurrentHashMap<>();
     // 株主ID -> 株主情報
@@ -30,18 +31,29 @@ public class StockProcessor {
     // 取引履歴（時系列）
     private static final List<Transaction> TransactionHistory = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
+    // WebSocketサーバーとJSONパーサーの宣言
+    private static WebsocketServer wsServer;
+    private static final Gson gson = new Gson();
+
     public static void main(String[] args) {
         System.out.println("StockProcessor を開始します...");
 
         // メタデータの読み込み
+        System.out.println("メタデータを読み込み中...");
         loadStockMetadata(Config.STOCK_META_CSV_PATH);
         loadShareholderMetadata(Config.SHAREHOLDER_CSV_PATH);
-
+        System.out.println("メタデータ読み込み完了");
+ 
         // 表示
         System.out.println("登録銘柄数: " + StockMetadata.size());
         System.out.println("登録株主数: " + ShareholderMetadata.size());
 
-        
+        // WebSocketサーバーの起動
+        System.out.println("WebSocketサーバーを起動中...");
+        wsServer = new WebsocketServer(); // ポート3000で起動
+        wsServer.start();
+        System.out.println("WebSocketサーバーがポート " + wsServer.getPort() + " で起動しました。");
+
         // スレッドプールを作成
         ExecutorService executor = Executors.newFixedThreadPool(3);
         
@@ -243,6 +255,12 @@ public class StockProcessor {
             // System.out.println("登録株主数: " + ShareholderMetadata.size());
             System.out.println("ポートフォリオ管理数: " + PortfolioManager.size());
             System.out.println("取引履歴件数: " + TransactionHistory.size());
+
+            // 仮JSONデータをWebSocketに送信してみる
+            String json = "{ \"type\": \"summary\", \"stockCount\": " + currentPrices.size() +
+                          ", \"transactionCount\": " + currentTransactions.size() + " }";
+            sendToWebClients(json);
+            System.out.println("集計結果をWebSocketクライアントに送信しました。");
             
             // より詳細な分析をここに追加
             performDetailedAnalysis();
@@ -274,22 +292,40 @@ public class StockProcessor {
                         System.out.println("  銘柄名: " + stockInfo.getStockName());
                     }
                 });
-        
+
         // 例：株主統計
         if (!ShareholderMetadata.isEmpty()) {
             long maleCount = ShareholderMetadata.values().stream()
                     .mapToInt(sh -> sh.getGender() == ShareholderInfo.Gender.MALE ? 1 : 0)
                     .sum();
             long femaleCount = ShareholderMetadata.size() - maleCount;
-            
+
             System.out.println("株主性別統計: 男性=" + maleCount + "名, 女性=" + femaleCount + "名");
-            
+
             // 平均年齢
             double averageAge = ShareholderMetadata.values().stream()
                     .mapToInt(ShareholderInfo::getAge)
                     .average()
                     .orElse(0.0);
             System.out.println("株主平均年齢: " + String.format("%.1f", averageAge) + "歳");
+        }
+    }
+
+    // 集計結果をWebSocket経由で送信するためのメソッド
+    private static void sendToWebClients(String json) {
+        if (wsServer == null || json == null || json.isEmpty()) {
+            System.err.println("WebSocketサーバーが起動していないか、送信するデータが無効です。");
+            return;
+        }
+
+        // JSONとして有効か検証
+        try {
+            JsonParser.parseString(json); // パースできれば有効なJSON
+            // 検証OKなのでブロードキャスト
+            wsServer.broadcast(json);
+        } catch (JsonSyntaxException e) {
+            System.err.println("WebSocket送信エラー: 無効なJSON形式です。送信を中止しました。");
+            System.err.println("エラーデータ: " + json);
         }
     }
 }

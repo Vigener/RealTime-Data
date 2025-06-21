@@ -43,6 +43,7 @@ public class Config {
     public static final String SHAREHOLDER_CSV_PATH = "src/main/resources/shareholder_metadata.csv";
     // つくば市のデータ
     public static final String TSUKUBA_CSV_PATH = "src/main/resources/tsukuba_metadata.csv";
+    public static final int WEBSOCKET_PORT = 3000; // WebSocketのポート番号
 
 
     

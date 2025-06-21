@@ -1,10 +1,14 @@
 {
     "java.configuration.updateBuildConfiguration": "automatic",
-    "java.compile.nullAnalysis.mode": "automatic",
-    "java.project.sourcePaths": ["src/main/java"],
+    "java.project.sourcePaths": [
+        "src/main/java"
+    ],
     "java.project.outputPath": "target/classes",
-    "java.clean.workspace": true,
-    "java.templates.typeComment": [],
-    "java.codeGeneration.insertionLocation": "afterCursor",
-    "java.codeGeneration.generateComments": true
+    "files.exclude": {
+        "**/target": true,
+        "**/.classpath": true,
+        "**/.project": true,
+        "**/.settings": true,
+        "**/.factorypath": true
+    }
 }
