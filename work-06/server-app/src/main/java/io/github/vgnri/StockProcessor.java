@@ -9,8 +9,11 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference; 
+import java.util.concurrent.atomic.AtomicReference;
+
 import com.google.gson.Gson;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonSyntaxException;
 
 public class StockProcessor {
     // 最新データを格納する共有データ構造（スレッドセーフ）
@@ -258,7 +261,12 @@ public class StockProcessor {
 
             // 仮JSONデータをWebSocketに送信してみる
             String json = "{ \"type\": \"summary\", \"stockCount\": " + currentPrices.size() +
-                          ", \"transactionCount\": " + currentTransactions.size() + " }";
+                          ", \"transactionCount\": " + currentTransactions.size() + 
+                          ", \"timestamp\": " + System.currentTimeMillis() +
+                          ", \"portfolioCount\": " + PortfolioManager.size() +
+                          ", \"historyCount\": " + TransactionHistory.size() +
+                          ", \"monitoredStocks\": " + stockPriceMap.size() +
+                          ", \"activeStocks\": " + transactionCountMap.size() + " }";
             sendToWebClients(json);
             System.out.println("集計結果をWebSocketクライアントに送信しました。");
             

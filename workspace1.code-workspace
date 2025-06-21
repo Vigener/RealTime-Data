@@ -1,9 +1,6 @@
 {
 	"folders": [
 		{
-			"path": "Work5-1"
-		},
-		{
 			"path": "work-06/server-app"
 		},
 		{
@@ -11,8 +8,11 @@
 		}
 	],
 	"settings": {
-		"java.compile.nullAnalysis.mode": "automatic",
-		"java.configuration.updateBuildConfiguration": "interactive",
-		"java.project.sourcePaths": []
+		"java.configuration.updateBuildConfiguration": "automatic",
+		"java.project.sourcePaths": [
+			"work-06/server-app/src/main/java"
+		],
+		"java.project.outputPath": "work-06/server-app/target/classes",
+		"java.compile.nullAnalysis.mode": "automatic"
 	}
 }
