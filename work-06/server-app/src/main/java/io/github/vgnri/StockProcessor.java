@@ -260,13 +260,58 @@ public class StockProcessor {
             System.out.println("取引履歴件数: " + TransactionHistory.size());
 
             // 仮JSONデータをWebSocketに送信してみる
-            String json = "{ \"type\": \"summary\", \"stockCount\": " + currentPrices.size() +
-                          ", \"transactionCount\": " + currentTransactions.size() + 
-                          ", \"timestamp\": " + System.currentTimeMillis() +
-                          ", \"portfolioCount\": " + PortfolioManager.size() +
-                          ", \"historyCount\": " + TransactionHistory.size() +
-                          ", \"monitoredStocks\": " + stockPriceMap.size() +
-                          ", \"activeStocks\": " + transactionCountMap.size() + " }";
+            // String json = "{ \"type\": \"summary\", \"stockCount\": " + currentPrices.size() +
+            //               ", \"transactionCount\": " + currentTransactions.size() + 
+            //               ", \"timestamp\": " + System.currentTimeMillis() +
+            //               ", \"portfolioCount\": " + PortfolioManager.size() +
+            //               ", \"historyCount\": " + TransactionHistory.size() +
+            //               ", \"monitoredStocks\": " + stockPriceMap.size() +
+            //               ", \"activeStocks\": " + transactionCountMap.size() + " }";
+            // currentPricesとcurrentTransactionsをJSONに変換
+            StringBuilder jsonBuilder = new StringBuilder();
+            jsonBuilder.append("{");
+            jsonBuilder.append("\"type\": \"data_update\",");
+            java.time.LocalTime now = java.time.LocalTime.now();
+            java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SS");
+            jsonBuilder.append("\"timestamp\": \"").append(now.format(formatter)).append("\",");
+            
+            // StockPricesをJSON形式で追加
+            jsonBuilder.append("\"stockPrices\": [");
+            if (currentPrices != null && !currentPrices.isEmpty()) {
+                for (int i = 0; i < currentPrices.size(); i++) {
+                    StockPrice sp = currentPrices.get(i);
+                    jsonBuilder.append("{");
+                    jsonBuilder.append("\"stockId\": ").append(sp.getStockId()).append(",");
+                    jsonBuilder.append("\"price\": ").append(sp.getPrice()).append(",");
+                    jsonBuilder.append("\"timestamp\": \"").append(sp.getTimestamp()).append("\"");
+                    jsonBuilder.append("}");
+                    if (i < currentPrices.size() - 1) {
+                        jsonBuilder.append(",");
+                    }
+                }
+            }
+            jsonBuilder.append("],");
+            
+            // TransactionsをJSON形式で追加
+            jsonBuilder.append("\"transactions\": [");
+            if (currentTransactions != null && !currentTransactions.isEmpty()) {
+                for (int i = 0; i < currentTransactions.size(); i++) {
+                    Transaction tr = currentTransactions.get(i);
+                    jsonBuilder.append("{");
+                    jsonBuilder.append("\"shareholderId\": ").append(tr.getShareholderId()).append(",");
+                    jsonBuilder.append("\"stockId\": ").append(tr.getStockId()).append(",");
+                    jsonBuilder.append("\"quantity\": ").append(tr.getQuantity()).append(",");
+                    jsonBuilder.append("\"timestamp\": \"").append(tr.getTimestamp()).append("\"");
+                    jsonBuilder.append("}");
+                    if (i < currentTransactions.size() - 1) {
+                        jsonBuilder.append(",");
+                    }
+                }
+            }
+            jsonBuilder.append("]");
+            jsonBuilder.append("}");
+            
+            String json = jsonBuilder.toString();
             sendToWebClients(json);
             System.out.println("集計結果をWebSocketクライアントに送信しました。");
             

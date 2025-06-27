@@ -41,6 +41,13 @@
     "configurations": [
         {
             "type": "java",
+            "name": "StockProcessor",
+            "request": "launch",
+            "mainClass": "io.github.vgnri.StockProcessor",
+            "projectName": "server-app"
+        },
+        {
+            "type": "java",
             "name": "RunConfiguration",
             "request": "launch",
             "mainClass": "io.github.vgnri.RunConfiguration",

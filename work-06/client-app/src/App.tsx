@@ -189,8 +189,7 @@ function App() {
           backgroundColor: "#f5f5f5", 
           padding: "10px", 
           borderRadius: "4px",
-          overflow: "auto",
-          maxHeight: "300px"
+          overflow: "auto"
         }}>
           {rawData || "No data received yet"}
         </pre>

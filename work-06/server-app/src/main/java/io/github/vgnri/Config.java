@@ -32,7 +32,12 @@ public class Config {
     
     // 株取引更新間隔
     public static final int TRADE_UPDATE_INTERVAL_MS = 100;
-    
+
+    // スライディングウィンドウ関連(Time Window)
+    public static final int SLIDING_WINDOW_SIZE_MS = 1000; // スライディングウィンドウのサイズ(1000ms = 1秒)
+    public static final int SLIDING_WINDOW_STEP_MS = 500; // スライディングウィンドウのステップ(500ms = 0.5秒)
+
+
 
     // CSVファイルパス
     // 株価データ
