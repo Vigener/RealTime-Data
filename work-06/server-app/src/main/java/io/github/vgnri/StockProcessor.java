@@ -1,19 +1,28 @@
 package io.github.vgnri;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.net.Socket;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.google.gson.annotations.SerializedName;
+
+import io.github.vgnri.config.Config;
+import io.github.vgnri.loader.MetadataLoader;
+import io.github.vgnri.model.Portfolio;
+import io.github.vgnri.model.ShareholderInfo;
+import io.github.vgnri.model.StockInfo;
+import io.github.vgnri.model.StockPrice;
+import io.github.vgnri.model.Transaction;
+import io.github.vgnri.server.WebsocketServer;
 
 public class StockProcessor {
     // 最新データを格納する共有データ構造（スレッドセーフ）
@@ -38,210 +47,223 @@ public class StockProcessor {
     private static WebsocketServer wsServer;
     private static final Gson gson = new Gson();
 
+    // 中間パース用のクラス
+    private static class StockPriceDto {
+        @SerializedName("stockId")
+        private int stockId;
+        
+        @SerializedName("price")
+        private double price;
+        
+        @SerializedName("timestamp")
+        private String timestamp;  // String型で受け取る
+        
+        // getters
+        public int getStockId() { return stockId; }
+        public double getPrice() { return price; }
+        public String getTimestamp() { return timestamp; }
+    }
+
+    private static class TransactionDto {
+        @SerializedName("shareholderId")
+        private int shareholderId;
+        
+        @SerializedName("stockId")
+        private int stockId;
+        
+        @SerializedName("quantity")
+        private int quantity;
+        
+        @SerializedName("timestamp")
+        private String timestamp;  // String型で受け取る
+        
+        // getters
+        public int getShareholderId() { return shareholderId; }
+        public int getStockId() { return stockId; }
+        public int getQuantity() { return quantity; }
+        public String getTimestamp() { return timestamp; }
+    }
+
+    // タイムスタンプ変換メソッド
+    private static LocalTime parseTimestamp(String timestampStr) {
+        try {
+            // マイクロ秒形式（HH:mm:ss.SSSSSS）
+            if (timestampStr.length() > 12) {
+                return LocalTime.parse(timestampStr, DateTimeFormatter.ofPattern("HH:mm:ss.SSSSSS"));
+            }
+            // ミリ秒形式（HH:mm:ss.SS）
+            else if (timestampStr.contains(".")) {
+                return LocalTime.parse(timestampStr, DateTimeFormatter.ofPattern("HH:mm:ss.SS"));
+            }
+            // 秒形式（HH:mm:ss）
+            else {
+                return LocalTime.parse(timestampStr, DateTimeFormatter.ofPattern("HH:mm:ss"));
+            }
+        } catch (Exception e) {
+            System.err.println("タイムスタンプパースエラー: " + timestampStr + " - " + e.getMessage());
+            return LocalTime.now(); // フォールバック
+        }
+    }
+
     public static void main(String[] args) {
         System.out.println("StockProcessor を開始します...");
 
         // メタデータの読み込み
         System.out.println("メタデータを読み込み中...");
-        loadStockMetadata(Config.STOCK_META_CSV_PATH);
-        loadShareholderMetadata(Config.SHAREHOLDER_CSV_PATH);
+        StockMetadata.putAll(MetadataLoader.loadStockMetadata(Config.STOCK_META_CSV_PATH));
+        ShareholderMetadata.putAll(MetadataLoader.loadShareholderMetadata(Config.SHAREHOLDER_CSV_PATH));
         System.out.println("メタデータ読み込み完了");
- 
+
         // 表示
         System.out.println("登録銘柄数: " + StockMetadata.size());
         System.out.println("登録株主数: " + ShareholderMetadata.size());
 
         // WebSocketサーバーの起動
-        System.out.println("WebSocketサーバーを起動中...");
-        wsServer = new WebsocketServer(); // ポート3000で起動
+        wsServer = new WebsocketServer();
         wsServer.start();
         System.out.println("WebSocketサーバーがポート " + wsServer.getPort() + " で起動しました。");
 
-        // スレッドプールを作成
-        ExecutorService executor = Executors.newFixedThreadPool(3);
-        
-        try {
-            // StockPriceデータ受信スレッド
-            executor.submit(() -> {
-                try (Socket socket = new Socket("localhost", Config.STOCK_PRICE_PORT);
-                     ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
-                    
-                    System.out.println("StockPrice受信スレッド開始 (ポート: " + Config.STOCK_PRICE_PORT + ")");
-                    
-                    while (!Thread.currentThread().isInterrupted()) {
-                        try {
-                            // StockPriceリストを受信
-                            @SuppressWarnings("unchecked")
-                            List<StockPrice> stockPrices = (List<StockPrice>) in.readObject();
-                            
-                            // 最新データを更新
-                            latestStockPrices.set(stockPrices);
-                            
-                            // 株価マップを更新
-                            for (StockPrice price : stockPrices) {
-                                stockPriceMap.put(price.getStockId(), price.getPrice());
-                            }
-                            
-                            System.out.println("StockPrice受信: " + stockPrices.size() + " 件");
-                            
-                        } catch (ClassNotFoundException e) {
-                            System.err.println("StockPriceクラス読み込みエラー: " + e.getMessage());
-                        }
-                    }
-                } catch (IOException e) {
-                    System.err.println("StockPrice受信エラー: " + e.getMessage());
-                }
-            });
+        System.out.println("使用ポート確認:");
+        System.out.println("STOCK_PRICE_PORT: " + Config.STOCK_PRICE_PORT);
+        System.out.println("TRANSACTION_PORT: " + Config.TRANSACTION_PORT);
+
+        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
+
+        // 共通の基底クラスまたはインターフェースを使用した統合データクラス
+        class StreamData {
+            private final String type;
+            private final Object data;
+            private final String rawData;
             
-            // Transaction受信スレッド
-            executor.submit(() -> {
-                try (Socket socket = new Socket("localhost", Config.TRANSACTION_PORT);
-                     ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
-                    
-                    System.out.println("Transaction受信スレッド開始 (ポート: " + Config.TRANSACTION_PORT + ")");
-                    
-                    while (!Thread.currentThread().isInterrupted()) {
-                        try {
-                            // Transactionリストを受信
-                            @SuppressWarnings("unchecked")
-                            List<Transaction> transactions = (List<Transaction>) in.readObject();
-                            
-                            // 最新データを更新
-                            latestTransactions.set(transactions);
-                            
-                            // 取引回数を集計
-                            for (Transaction transaction : transactions) {
-                                transactionCountMap.merge(transaction.getStockId(), 1, Integer::sum);
-                                // --- 追加: 取引履歴に追加 ---
-                                TransactionHistory.add(transaction);
-                                // --- 追加: ポートフォリオ更新（例: 簡易実装） ---
-                                // PortfolioManager.computeIfAbsent(transaction.getShareholderId(), k -> new Portfolio())
-                                //     .updateWithTransaction(transaction);
-                            }
-                            
-                            System.out.println("Transaction受信: " + transactions.size() + " 件");
-                            
-                        } catch (ClassNotFoundException e) {
-                            System.err.println("Transactionクラス読み込みエラー: " + e.getMessage());
-                        }
-                    }
-                } catch (IOException e) {
-                    System.err.println("Transaction受信エラー: " + e.getMessage());
-                }
-            });
-            
-            // データ集計・分析スレッド
-            executor.submit(() -> {
-                try {
-                    while (!Thread.currentThread().isInterrupted()) {
-                        // 定期的に集計処理を実行
-                        performAnalysis();
-                        
-                        Thread.sleep(1000); // 1秒間隔で集計
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            });
-            
-            // シャットダウンフックを追加
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                System.out.println("\nStockProcessorを停止中...");
-                executor.shutdownNow();
-                System.out.println("StockProcessorが正常に終了しました。");
-            }));
-            
-            // メインスレッドを継続（Ctrl+Cまで実行）
-            Thread.currentThread().join();
-            
-        } catch (InterruptedException e) {
-            System.out.println("処理が中断されました");
-        } finally {
-            // スレッドプールをシャットダウン
-            executor.shutdownNow();
-            System.out.println("StockProcessorが正常に終了しました。");
-        }
-    }
-    
-    // 株メタデータをCSVファイルから読み込む
-    private static void loadStockMetadata(String csvFilePath) {
-        System.out.println("株メタデータを読み込み中: " + csvFilePath);
-        
-        try (BufferedReader reader = new BufferedReader(new FileReader(csvFilePath))) {
-            String line;
-            int lineNumber = 0;
-            
-            while ((line = reader.readLine()) != null) {
-                lineNumber++;
-                
-                // ヘッダ行をスキップ
-                if (lineNumber == 1) {
-                    System.out.println("ヘッダ: " + line);
-                    continue;
-                }
-                
-                // 空行をスキップ
-                if (line.trim().isEmpty()) {
-                    continue;
-                }
-                
-                try {
-                    StockInfo stockInfo = StockInfo.fromCsvLine(line);
-                    StockMetadata.put(stockInfo.getStockId(), stockInfo);
-                    System.out.println("読み込み完了: " + stockInfo.getStockName() + " (ID: " + stockInfo.getStockId() + ")");
-                } catch (Exception e) {
-                    System.err.println("行 " + lineNumber + " の解析に失敗: " + line);
-                    System.err.println("エラー: " + e.getMessage());
-                }
+            public StreamData(String type, Object data, String rawData) {
+                this.type = type;
+                this.data = data;
+                this.rawData = rawData;
+            }
+
+            public StreamData(String type, Object data) {
+                this(type, data, null);
             }
             
-            System.out.println("株メタデータ読み込み完了: " + StockMetadata.size() + " 件");
+            public String getType() { return type; }
+            public Object getData() { return data; }
+            public String getRawData() { return rawData; }
             
+            @Override
+            public String toString() {
+                return type + ": " + data.toString();
+            }
+        }
+
+        // StockPriceストリームをStreamDataに変換
+        DataStream<StreamData> stockPriceStreamData = env.socketTextStream("localhost", Config.STOCK_PRICE_PORT, "\n")
+                .map(line -> {
+                    try {
+                        String cleanLine = line.replaceFirst("^\\d+>\\s*", "");
+                        
+                        if (cleanLine == null || cleanLine.trim().isEmpty()) {
+                            return null;
+                        }
+                        
+                        if (!cleanLine.contains("\"price\"")) {
+                            return null;
+                        }
+                        
+                        StockPriceDto dto = gson.fromJson(cleanLine, StockPriceDto.class);
+                        StockPrice stockPrice = new StockPrice(
+                            dto.getStockId(),
+                            dto.getPrice(),
+                            parseTimestamp(dto.getTimestamp())
+                        );
+                        
+                        return new StreamData("StockPrice", stockPrice);
+                    } catch (Exception e) {
+                        System.err.println("StockPrice パースエラー: " + e.getMessage() + " - データ: " + line);
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .name("StockPrice to StreamData");
+
+        // TransactionストリームをStreamDataに変換
+        DataStream<StreamData> transactionStreamData = env.socketTextStream("localhost", Config.TRANSACTION_PORT, "\n")
+                .map(line -> {
+                    try {
+                        String cleanLine = line.replaceFirst("^\\d+>\\s*", "");
+                        
+                        if (cleanLine == null || cleanLine.trim().isEmpty()) {
+                            return null;
+                        }
+                        
+                        if (!cleanLine.contains("\"shareholderId\"") || !cleanLine.contains("\"quantity\"")) {
+                            return null;
+                        }
+                        
+                        TransactionDto dto = gson.fromJson(cleanLine, TransactionDto.class);
+                        Transaction transaction = new Transaction(
+                            dto.getShareholderId(),
+                            dto.getStockId(),
+                            dto.getQuantity(),
+                            parseTimestamp(dto.getTimestamp())
+                        );
+                        
+                        return new StreamData("Transaction", transaction);
+                    } catch (Exception e) {
+                        System.err.println("Transaction パースエラー: " + e.getMessage() + " - データ: " + line);
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .name("Transaction to StreamData");
+
+        // 現在のstockPriceの更新
+        stockPriceStreamData
+                .process(new KeyedProcessFunction<String, StreamData, StreamData>() {
+                    @Override
+                    public void processElement(StreamData value, Context ctx, Collector<StreamData> out) throws Exception {
+                        // 最新の株価情報を更新
+                        latestStockPrices.update(value.getData());
+                        out.collect(value);
+                    }
+                });
+
+        // transactionStreamDataのみスライディングウィンドウする
+        transactionStreamData
+                .keyBy(streamData -> streamData.getData().getShareholderId())
+                .window(SlidingEventTimeWindows.of(Time.minutes(1), Time.seconds(30)))
+                .aggregate(new TransactionAggregator());
+
+        // 2つのストリームを統合
+        // DataStream<StreamData> combinedStream = stockPriceStreamData
+        //         .union(transactionStreamData);
+
+        // // 統合されたストリームから元の型別ストリームを再分離
+        // DataStream<StockPrice> stockPriceStream = combinedStream
+        //         .filter(streamData -> "StockPrice".equals(streamData.getType()))
+        //         .map(streamData -> (StockPrice) streamData.getData())
+        //         .name("Extracted StockPrice Stream");
+
+        // DataStream<Transaction> transactionStream = combinedStream
+        //         .filter(streamData -> "Transaction".equals(streamData.getType()))
+        //         .map(streamData -> (Transaction) streamData.getData())
+        //         .name("Extracted Transaction Stream");
+
+        // 両方のストリームを同時にprint
+        stockPriceStream.print("StockPrice Stream");
+        // transactionStream.print("Transaction Stream");
+
+        // 統合ストリームもprint（デバッグ用）
+        // combinedStream.print("Combined Stream");
+
+        try {
+            env.execute("Real-time Stock Analysis");
         } catch (Exception e) {
-            System.err.println("CSVファイルの読み込みに失敗: " + e.getMessage());
+            System.err.println("Flinkジョブ実行エラー: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-        // 株主メタデータをCSVファイルから読み込む
-    private static void loadShareholderMetadata(String csvFilePath) {
-        System.out.println("株主メタデータを読み込み中: " + csvFilePath);
-        
-        try (BufferedReader reader = new BufferedReader(new FileReader(csvFilePath))) {
-            String line;
-            int lineNumber = 0;
-            
-            while ((line = reader.readLine()) != null) {
-                lineNumber++;
-                
-                // ヘッダ行をスキップ
-                if (lineNumber == 1) {
-                    System.out.println("ヘッダ: " + line);
-                    continue;
-                }
-                
-                // 空行をスキップ
-                if (line.trim().isEmpty()) {
-                    continue;
-                }
-                
-                try {
-                    ShareholderInfo shareholderInfo = ShareholderInfo.fromCsvLine(line);
-                    ShareholderMetadata.put(shareholderInfo.getShareholderId(), shareholderInfo);
-                    System.out.println("読み込み完了: " + shareholderInfo.getShareholderName() + " (ID: " + shareholderInfo.getShareholderId() + ")");
-                } catch (Exception e) {
-                    System.err.println("行 " + lineNumber + " の解析に失敗: " + line);
-                    System.err.println("エラー: " + e.getMessage());
-                }
-            }
-            
-            System.out.println("株主メタデータ読み込み完了: " + ShareholderMetadata.size() + " 件");
-            
-        } catch (Exception e) {
-            System.err.println("CSVファイルの読み込みに失敗: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
 
     // データ分析メソッド
     private static void performAnalysis() {
@@ -379,6 +401,16 @@ public class StockProcessor {
         } catch (JsonSyntaxException e) {
             System.err.println("WebSocket送信エラー: 無効なJSON形式です。送信を中止しました。");
             System.err.println("エラーデータ: " + json);
+        }
+    }
+
+    // ポート利用可能性チェック用メソッド
+    private static boolean isPortAvailable(int port) {
+        try (java.net.Socket socket = new java.net.Socket()) {
+            socket.connect(new java.net.InetSocketAddress("localhost", port), 1000);
+            return true;
+        } catch (Exception e) {
+            return false;
         }
     }
 }

@@ -34,7 +34,7 @@ public class RunConfiguration {
         // StockPrice起動
         System.out.println("StockPrice サービス起動中...");
         ProcessBuilder stockPriceBuilder = new ProcessBuilder(
-            "java", "-cp", classpath, "io.github.vgnri.StockPrice"
+            "java", "-cp", classpath, "io.github.vgnri.model.StockPrice"
         );
         Process stockPriceProcess = stockPriceBuilder.start();
         processes.add(stockPriceProcess);
@@ -45,7 +45,7 @@ public class RunConfiguration {
         // Transaction起動
         System.out.println("Transaction サービス起動中...");
         ProcessBuilder transactionBuilder = new ProcessBuilder(
-            "java", "-cp", classpath, "io.github.vgnri.Transaction"
+            "java", "-cp", classpath, "io.github.vgnri.model.Transaction"
         );
         Process transactionProcess = transactionBuilder.start();
         processes.add(transactionProcess);
