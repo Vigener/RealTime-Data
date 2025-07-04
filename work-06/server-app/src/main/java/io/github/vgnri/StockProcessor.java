@@ -1,14 +1,21 @@
 package io.github.vgnri;
 
+import java.io.Serializable;
+import java.time.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
@@ -23,6 +30,8 @@ import io.github.vgnri.model.StockInfo;
 import io.github.vgnri.model.StockPrice;
 import io.github.vgnri.model.Transaction;
 import io.github.vgnri.server.WebsocketServer;
+import io.github.vgnri.sink.StockRichSinkFunction;
+import io.github.vgnri.window.StockTimeWindowFunction;
 
 public class StockProcessor {
     // 最新データを格納する共有データ構造（スレッドセーフ）
@@ -82,6 +91,45 @@ public class StockProcessor {
         public int getStockId() { return stockId; }
         public int getQuantity() { return quantity; }
         public String getTimestamp() { return timestamp; }
+    }
+
+    // 取引集計用のクラス
+    private static class TransactionSummary implements Serializable {
+        private int totalQuantity = 0;
+        private int transactionCount = 0;
+        private double averageQuantity = 0.0;
+        private int maxQuantity = Integer.MIN_VALUE;
+        private int minQuantity = Integer.MAX_VALUE;
+        private List<LocalTime> timestamps = new ArrayList<>();
+        
+        public void addTransaction(Transaction transaction) {
+            int quantity = transaction.getQuantity();
+            totalQuantity += quantity;
+            transactionCount++;
+            timestamps.add(transaction.getTimestamp());
+            
+            maxQuantity = Math.max(maxQuantity, quantity);
+            minQuantity = Math.min(minQuantity, quantity);
+            averageQuantity = (double) totalQuantity / transactionCount;
+        }
+        
+        public void merge(TransactionSummary other) {
+            this.totalQuantity += other.totalQuantity;
+            this.transactionCount += other.transactionCount;
+            this.timestamps.addAll(other.timestamps);
+            
+            this.maxQuantity = Math.max(this.maxQuantity, other.maxQuantity);
+            this.minQuantity = Math.min(this.minQuantity, other.minQuantity);
+            this.averageQuantity = (double) this.totalQuantity / this.transactionCount;
+        }
+        
+        // Getters for JSON serialization
+        public int getTotalQuantity() { return totalQuantity; }
+        public int getTransactionCount() { return transactionCount; }
+        public double getAverageQuantity() { return averageQuantity; }
+        public int getMaxQuantity() { return maxQuantity == Integer.MIN_VALUE ? 0 : maxQuantity; }
+        public int getMinQuantity() { return minQuantity == Integer.MAX_VALUE ? 0 : minQuantity; }
+        public int getTimestampCount() { return timestamps.size(); }
     }
 
     // タイムスタンプ変換メソッド
@@ -217,22 +265,48 @@ public class StockProcessor {
                 .filter(Objects::nonNull)
                 .name("Transaction to StreamData");
 
-        // 現在のstockPriceの更新
-        stockPriceStreamData
-                .process(new KeyedProcessFunction<String, StreamData, StreamData>() {
+        // 現在のstockPriceの更新と転送
+        DataStream<String> stockPriceJsonStream = stockPriceStreamData
+                .map(new MapFunction<StreamData, String>() {
                     @Override
-                    public void processElement(StreamData value, Context ctx, Collector<StreamData> out) throws Exception {
+                    public String map(StreamData value) throws Exception {
                         // 最新の株価情報を更新
-                        latestStockPrices.update(value.getData());
-                        out.collect(value);
+                        StockPrice stockPrice = (StockPrice) value.getData();
+                        stockPriceMap.put(stockPrice.getStockId(), stockPrice.getPrice());
+                        
+                        // WebSocket送信用のJSON文字列を生成
+                        Gson gson = new Gson();
+                        Map<String, Object> jsonData = new HashMap<>();
+                        jsonData.put("type", "stockPrice");
+                        jsonData.put("stockId", stockPrice.getStockId());
+                        jsonData.put("price", stockPrice.getPrice());
+                        jsonData.put("timestamp", stockPrice.getTimestamp().toString());
+                        
+                        return gson.toJson(jsonData);
                     }
-                });
+                })
+                .name("StockPrice to JSON");
 
-        // transactionStreamDataのみスライディングウィンドウする
-        transactionStreamData
-                .keyBy(streamData -> streamData.getData().getShareholderId())
-                .window(SlidingEventTimeWindows.of(Time.minutes(1), Time.seconds(30)))
-                .aggregate(new TransactionAggregator());
+        // transactionStreamDataのスライディングウィンドウ処理
+        DataStream<String> transactionAnalysisStream = transactionStreamData
+                .windowAll(SlidingProcessingTimeWindows.of(
+                    Duration.ofSeconds(5),
+                    Duration.ofSeconds(1)
+                ))
+                .process(new StockTimeWindowFunction());
+
+        // 2つのストリームを統合してWebSocket送信
+        DataStream<String> combinedJsonStream = stockPriceJsonStream
+                .union(transactionAnalysisStream);
+
+        // WebSocket経由で送信
+        combinedJsonStream.addSink(new StockRichSinkFunction("localhost", 3000))
+                .name("WebSocket Sink");
+
+        // デバッグ用プリント
+        // stockPriceJsonStream.print("StockPrice JSON");
+        // transactionAnalysisStream.print("Transaction Analysis");
+        // combinedJsonStream.print("Combined Stream");
 
         // 2つのストリームを統合
         // DataStream<StreamData> combinedStream = stockPriceStreamData
@@ -250,7 +324,7 @@ public class StockProcessor {
         //         .name("Extracted Transaction Stream");
 
         // 両方のストリームを同時にprint
-        stockPriceStream.print("StockPrice Stream");
+        // stockPriceStream.print("StockPrice Stream");
         // transactionStream.print("Transaction Stream");
 
         // 統合ストリームもprint（デバッグ用）
