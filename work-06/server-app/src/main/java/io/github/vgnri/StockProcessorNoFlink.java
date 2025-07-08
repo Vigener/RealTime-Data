@@ -1,6 +1,10 @@
 package io.github.vgnri;
 
+import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.InputStreamReader;
 import java.io.Serializable;
+import java.net.Socket;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -35,7 +39,7 @@ import io.github.vgnri.model.Transaction;
 import io.github.vgnri.server.WebsocketServer;
 import io.github.vgnri.sink.StockRichSinkFunction;
 
-public class StockProcessor {
+public class StockProcessorNoFlink {
     // 最新データを格納する共有データ構造（スレッドセーフ）
     private static final AtomicReference<List<StockPrice>> latestStockPrices = new AtomicReference<>();
     private static final AtomicReference<List<Transaction>> latestTransactions = new AtomicReference<>();
@@ -177,8 +181,106 @@ public class StockProcessor {
         System.out.println("STOCK_PRICE_PORT: " + Config.STOCK_PRICE_PORT);
         System.out.println("TRANSACTION_PORT: " + Config.TRANSACTION_PORT);
 
-        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(1);
+        Socket stockPriceSocket = new Socket("localhost", Config.STOCK_PRICE_PORT);
+        Socket transactionSocket = new Socket("localhost", Config.TRANSACTION_PORT);
+
+        System.out.println("ソケット接続確認完了");
+
+        // 受信ストリームの作成
+        DataInputStream stockPriceInput = new DataInputStream(stockPriceSocket.getInputStream());
+        DataInputStream transactionInput = new DataInputStream(transactionSocket.getInputStream());
+
+        System.out.println("Waiting for WebSocket connection from client...");
+        while (wsServer.getConnectionCount() < 1) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        System.out.println("WebSocketクライアントが接続されました。");
+
+        // StockPriceの処理
+        // StockPriceとTransactionの受信・処理スレッドを作成
+        Thread stockPriceThread = new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(stockPriceSocket.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    // 受信した行をパース
+                    String cleanLine = line.replaceFirst("^\\d+>\\s*", "");
+                    
+                    if (cleanLine == null || cleanLine.trim().isEmpty()) {
+                        continue; // 空行は無視
+                    }
+                    
+                    // JSONパース
+                    StockPriceDto dto = gson.fromJson(cleanLine, StockPriceDto.class);
+                    
+                    // DTOの値を検証
+                    if (dto == null || dto.getStockId() <= 0 || dto.getPrice() <= 0.0) {
+                        System.err.println("無効なStockPriceデータ: " + cleanLine);
+                        continue; // 無効なデータは無視
+                    }
+                    
+                    // StockPriceオブジェクトを作成
+                    StockPrice stockPrice = new StockPrice(
+                        dto.getStockId(),
+                        dto.getPrice(),
+                        parseTimestamp(dto.getTimestamp())
+                    );
+                    
+                    // 最新データに追加
+                    List<StockPrice> currentPrices = latestStockPrices.get();
+                    if (currentPrices == null) {
+                        currentPrices = new ArrayList<>();
+                    }
+                    currentPrices.add(stockPrice);
+                    latestStockPrices.set(currentPrices);
+                }
+            } catch (Exception e) {
+            System.err.println("StockPrice受信エラー: " + e.getMessage());
+            }
+        });
+
+        Thread transactionThread = new Thread(() -> {
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(transactionSocket.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                processTransactionLine(line);
+            }
+            } catch (Exception e) {
+            System.err.println("Transaction受信エラー: " + e.getMessage());
+            }
+        });
+
+        // スレッドをデーモンとして設定
+        stockPriceThread.setDaemon(true);
+        transactionThread.setDaemon(true);
+
+        // スレッド開始
+        stockPriceThread.start();
+        transactionThread.start();
+        System.out.println("データ受信スレッドを開始しました。");
+
+        // 定期的な分析・送信処理（メインスレッド）
+        while (true) {
+            try {
+                Thread.sleep(1000); // 1秒間隔で分析
+                performAnalysis();
+            } catch (InterruptedException e) {
+                System.err.println("メインループが中断されました。");
+                break;
+            }
+        }
+
+
+        // ウィンドウの初期化
+        LocalTime[] window = null;
+
+        
+        
 
         // StockPriceストリームを作成（より厳密なフィルタリング）
         DataStream<StockPrice> stockPriceStream = env.socketTextStream("localhost", Config.STOCK_PRICE_PORT, "\n")
