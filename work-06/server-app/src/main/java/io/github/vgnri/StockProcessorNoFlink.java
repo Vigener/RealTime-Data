@@ -1,28 +1,17 @@
 package io.github.vgnri;
 
 import java.io.BufferedReader;
-import java.io.DataInputStream;
 import java.io.InputStreamReader;
 import java.io.Serializable;
 import java.net.Socket;
-import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
-
-import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.windowing.ProcessAllWindowFunction;
-import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
-import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
-import org.apache.flink.util.Collector;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
@@ -37,7 +26,6 @@ import io.github.vgnri.model.StockInfo;
 import io.github.vgnri.model.StockPrice;
 import io.github.vgnri.model.Transaction;
 import io.github.vgnri.server.WebsocketServer;
-import io.github.vgnri.sink.StockRichSinkFunction;
 
 public class StockProcessorNoFlink {
     // 最新データを格納する共有データ構造（スレッドセーフ）
@@ -142,16 +130,24 @@ public class StockProcessorNoFlink {
     private static LocalTime parseTimestamp(String timestampStr) {
         try {
             // マイクロ秒形式（HH:mm:ss.SSSSSS）
-            if (timestampStr.length() > 12) {
+            if (timestampStr.matches("\\d{2}:\\d{2}:\\d{2}\\.\\d{6}")) {
                 return LocalTime.parse(timestampStr, DateTimeFormatter.ofPattern("HH:mm:ss.SSSSSS"));
             }
-            // ミリ秒形式（HH:mm:ss.SS）
-            else if (timestampStr.contains(".")) {
+            // ミリ秒3桁（HH:mm:ss.SSS）
+            else if (timestampStr.matches("\\d{2}:\\d{2}:\\d{2}\\.\\d{3}")) {
+                return LocalTime.parse(timestampStr, DateTimeFormatter.ofPattern("HH:mm:ss.SSS"));
+            }
+            // ミリ秒2桁（HH:mm:ss.SS）
+            else if (timestampStr.matches("\\d{2}:\\d{2}:\\d{2}\\.\\d{2}")) {
                 return LocalTime.parse(timestampStr, DateTimeFormatter.ofPattern("HH:mm:ss.SS"));
             }
             // 秒形式（HH:mm:ss）
-            else {
+            else if (timestampStr.matches("\\d{2}:\\d{2}:\\d{2}")) {
                 return LocalTime.parse(timestampStr, DateTimeFormatter.ofPattern("HH:mm:ss"));
+            }
+            // それ以外は自動判定
+            else {
+                return LocalTime.parse(timestampStr);
             }
         } catch (Exception e) {
             System.err.println("タイムスタンプパースエラー: " + timestampStr + " - " + e.getMessage());
@@ -159,7 +155,17 @@ public class StockProcessorNoFlink {
         }
     }
 
-    public static void main(String[] args) {
+    // ウィンドウ管理用（スレッドセーフ）
+    private static final int WINDOW_SIZE_SECONDS = 5;
+    private static final int SLIDE_SIZE_SECONDS = 1;
+    private static final Object windowLock = new Object();
+    private static final Object bufferLock = new Object();
+    // Transaction情報を格納するバッファ（Map型で拡張情報も含める）
+    private static final java.util.concurrent.CopyOnWriteArrayList<Map<String, Object>> transactionBuffer = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("HH:mm:ss.SS");
+    private static final AtomicReference<LocalTime[]> windowRef = new AtomicReference<>(null);
+
+    public static void main(String[] args) throws Exception {
         System.out.println("StockProcessor を開始します...");
 
         // メタデータの読み込み
@@ -181,98 +187,112 @@ public class StockProcessorNoFlink {
         System.out.println("STOCK_PRICE_PORT: " + Config.STOCK_PRICE_PORT);
         System.out.println("TRANSACTION_PORT: " + Config.TRANSACTION_PORT);
 
-        Socket stockPriceSocket = new Socket("localhost", Config.STOCK_PRICE_PORT);
-        Socket transactionSocket = new Socket("localhost", Config.TRANSACTION_PORT);
+        final Socket stockPriceSocket = new Socket("localhost", Config.STOCK_PRICE_PORT);
+        final Socket transactionSocket = new Socket("localhost", Config.TRANSACTION_PORT);
 
-        System.out.println("ソケット接続確認完了");
+        try {
+            System.out.println("ソケット接続確認完了");
 
-        // 受信ストリームの作成
-        DataInputStream stockPriceInput = new DataInputStream(stockPriceSocket.getInputStream());
-        DataInputStream transactionInput = new DataInputStream(transactionSocket.getInputStream());
+            // 受信ストリームの作成
+            // DataInputStream stockPriceInput = new DataInputStream(stockPriceSocket.getInputStream());
+            // DataInputStream transactionInput = new DataInputStream(transactionSocket.getInputStream());
 
-        System.out.println("Waiting for WebSocket connection from client...");
-        while (wsServer.getConnectionCount() < 1) {
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-        System.out.println("WebSocketクライアントが接続されました。");
-
-        // StockPriceの処理
-        // StockPriceとTransactionの受信・処理スレッドを作成
-        Thread stockPriceThread = new Thread(() -> {
-            try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(stockPriceSocket.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    // 受信した行をパース
-                    String cleanLine = line.replaceFirst("^\\d+>\\s*", "");
-                    
-                    if (cleanLine == null || cleanLine.trim().isEmpty()) {
-                        continue; // 空行は無視
-                    }
-                    
-                    // JSONパース
-                    StockPriceDto dto = gson.fromJson(cleanLine, StockPriceDto.class);
-                    
-                    // DTOの値を検証
-                    if (dto == null || dto.getStockId() <= 0 || dto.getPrice() <= 0.0) {
-                        System.err.println("無効なStockPriceデータ: " + cleanLine);
-                        continue; // 無効なデータは無視
-                    }
-                    
-                    // StockPriceオブジェクトを作成
-                    StockPrice stockPrice = new StockPrice(
-                        dto.getStockId(),
-                        dto.getPrice(),
-                        parseTimestamp(dto.getTimestamp())
-                    );
-                    
-                    // 最新データに追加
-                    List<StockPrice> currentPrices = latestStockPrices.get();
-                    if (currentPrices == null) {
-                        currentPrices = new ArrayList<>();
-                    }
-                    currentPrices.add(stockPrice);
-                    latestStockPrices.set(currentPrices);
+            System.out.println("Waiting for WebSocket connection from client...");
+            while (wsServer.getConnectionCount() < 1) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
-            } catch (Exception e) {
-            System.err.println("StockPrice受信エラー: " + e.getMessage());
             }
-        });
+            System.out.println("WebSocketクライアントが接続されました。");
 
-        Thread transactionThread = new Thread(() -> {
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                new java.io.InputStreamReader(transactionSocket.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                processTransactionLine(line);
+            // 初めにメタデータのうち、株主IDと株主名の対応関係だけWebソケットで送信
+            // 株主IDと株主名の対応関係をMapで作成し、WebSocketで送信
+            Map<Integer, String> shareholderIdNameMap = new HashMap<>();
+            for (Map.Entry<Integer, ShareholderInfo> entry : ShareholderMetadata.entrySet()) {
+                shareholderIdNameMap.put(entry.getKey(), entry.getValue().getShareholderName());
             }
-            } catch (Exception e) {
-            System.err.println("Transaction受信エラー: " + e.getMessage());
+            String shareholderIdNameJson = gson.toJson(shareholderIdNameMap);
+            wsServer.broadcast("{\"ShareholderIdNameMap\":" + shareholderIdNameJson + "}");
+
+            // StockPriceの処理
+            // StockPriceとTransactionの受信・処理スレッドを作成
+            Thread stockPriceThread = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(stockPriceSocket.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        // 受信した行をパース
+                        String cleanLine = line.replaceFirst("^\\d+>\\s*", "");
+                        
+                        if (cleanLine == null || cleanLine.trim().isEmpty()) {
+                            continue; // 空行は無視
+                        }
+                        
+                        // JSONパース
+                        StockPriceDto dto = gson.fromJson(cleanLine, StockPriceDto.class);
+                        
+                        // DTOの値を検証
+                        if (dto == null || dto.getStockId() <= 0 || dto.getPrice() <= 0.0) {
+                            System.err.println("無効なStockPriceデータ: " + cleanLine);
+                            continue; // 無効なデータは無視
+                        }
+                        
+                        // StockPriceオブジェクトを作成
+                        StockPrice stockPrice = new StockPrice(
+                            dto.getStockId(),
+                            dto.getPrice(),
+                            parseTimestamp(dto.getTimestamp())
+                        );
+                        
+                        // 最新データに追加
+                        List<StockPrice> currentPrices = latestStockPrices.get();
+                        if (currentPrices == null) {
+                            currentPrices = new ArrayList<>();
+                        }
+                        currentPrices.add(stockPrice);
+                        latestStockPrices.set(currentPrices);
+                    }
+                } catch (Exception e) {
+                System.err.println("StockPrice受信エラー: " + e.getMessage());
+                }
+            });
+
+            Thread transactionThread = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(transactionSocket.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        processTransactionLine(line);
+                    }
+                } catch (Exception e) {
+                System.err.println("Transaction受信エラー: " + e.getMessage());
+                }
+            });
+
+            // スレッドをデーモンとして設定
+            stockPriceThread.setDaemon(true);
+            transactionThread.setDaemon(true);
+
+            // スレッド開始
+            stockPriceThread.start();
+            transactionThread.start();
+            System.out.println("データ受信スレッドを開始しました。");
+
+            // 定期的な分析・送信処理（メインスレッド）
+            while (true) {
+                try {
+                    Thread.sleep(1000); // 1秒間隔で分析
+                    performAnalysis();
+                } catch (InterruptedException e) {
+                    System.err.println("メインループが中断されました。");
+                    break;
+                }
             }
-        });
-
-        // スレッドをデーモンとして設定
-        stockPriceThread.setDaemon(true);
-        transactionThread.setDaemon(true);
-
-        // スレッド開始
-        stockPriceThread.start();
-        transactionThread.start();
-        System.out.println("データ受信スレッドを開始しました。");
-
-        // 定期的な分析・送信処理（メインスレッド）
-        while (true) {
-            try {
-                Thread.sleep(1000); // 1秒間隔で分析
-                performAnalysis();
-            } catch (InterruptedException e) {
-                System.err.println("メインループが中断されました。");
-                break;
-            }
+        } finally {
+            try { stockPriceSocket.close(); } catch (Exception e) { /* ignore */ }
+            try { transactionSocket.close(); } catch (Exception e) { /* ignore */ }
         }
 
 
@@ -280,95 +300,6 @@ public class StockProcessorNoFlink {
         LocalTime[] window = null;
 
         
-        
-
-        // StockPriceストリームを作成（より厳密なフィルタリング）
-        DataStream<StockPrice> stockPriceStream = env.socketTextStream("localhost", Config.STOCK_PRICE_PORT, "\n")
-        .map(line -> {
-            try {
-                String cleanLine = line.replaceFirst("^\\d+>\\s*", "");
-                
-                if (cleanLine == null || cleanLine.trim().isEmpty()) {
-                    return null;
-                }
-                
-                // より厳密なStockPriceデータの判定
-                if (!cleanLine.contains("\"price\"") || 
-                    cleanLine.contains("\"shareholderId\"") || 
-                    cleanLine.contains("\"quantity\"")) {
-                    return null;
-                }
-                
-                StockPriceDto dto = gson.fromJson(cleanLine, StockPriceDto.class);
-                
-                // DTOの値を検証（nullチェックも追加）
-                if (dto == null || dto.getStockId() <= 0 || dto.getPrice() <= 0.0) {
-                    return null;
-                }
-                
-                return new StockPrice(
-                    dto.getStockId(),
-                    dto.getPrice(),
-                    parseTimestamp(dto.getTimestamp())
-                );
-            } catch (JsonSyntaxException e) {
-                // JSONパースエラーは静かに無視
-                return null;
-            } catch (Exception e) {
-                System.err.println("StockPrice パースエラー: " + e.getMessage() + " - データ: " + line);
-                return null;
-            }
-        })
-        .filter(Objects::nonNull)
-        .name("StockPrice Stream");
-
-        // Transactionストリームを作成（より厳密なフィルタリング）
-        DataStream<Transaction> transactionStream = env.socketTextStream("localhost", Config.TRANSACTION_PORT, "\n")
-        .map(line -> {
-            try {
-                String cleanLine = line.replaceFirst("^\\d+>\\s*", "");
-                
-                if (cleanLine == null || cleanLine.trim().isEmpty()) {
-                    return null;
-                }
-                
-                // より厳密なTransactionデータの判定
-                if (!cleanLine.contains("\"shareholderId\"") || 
-                    !cleanLine.contains("\"quantity\"") || 
-                    cleanLine.contains("\"price\"")) {
-                    return null;
-                }
-                
-                TransactionDto dto = gson.fromJson(cleanLine, TransactionDto.class);
-                
-                // DTOの値を検証（nullチェックも追加）
-                if (dto == null || dto.getShareholderId() <= 0 || 
-                    dto.getStockId() <= 0 || dto.getQuantity() <= 0) {
-                    return null;
-                }
-                
-                return new Transaction(
-                    dto.getShareholderId(),
-                    dto.getStockId(),
-                    dto.getQuantity(),
-                    parseTimestamp(dto.getTimestamp())
-                );
-            } catch (JsonSyntaxException e) {
-                // JSONパースエラーは静かに無視
-                return null;
-            } catch (Exception e) {
-                System.err.println("Transaction パースエラー: " + e.getMessage() + " - データ: " + line);
-                return null;
-            }
-        })
-        .filter(Objects::nonNull)
-        .name("Transaction Stream");
-
-        // StockPriceの副作用処理（株価マップの更新）
-        stockPriceStream.map(stockPrice -> {
-            stockPriceMap.put(stockPrice.getStockId(), stockPrice.getPrice());
-            return stockPrice;
-        }).name("StockPrice Map Update");
 
         // // StockPriceをJSON文字列に変換
         // DataStream<String> stockPriceJsonStream = stockPriceStream
@@ -403,81 +334,111 @@ public class StockProcessorNoFlink {
         //         .name("Transaction Analysis");
 
         // StockTimeWindowFunctionを修正して、統合処理を内部で行う
-        DataStream<String> combinedAnalysisStream = transactionStream
-                .windowAll(SlidingProcessingTimeWindows.of(
-                    Duration.ofSeconds(5),
-                    Duration.ofSeconds(1)
-                ))
-                .process(new ProcessAllWindowFunction<Transaction, String, TimeWindow>() {
-                    @Override
-                    public void process(Context context, Iterable<Transaction> elements, Collector<String> out) throws Exception {
-                        // ウィンドウ内の取引データを収集
-                        List<Transaction> windowData = new ArrayList<>();
-                        Map<Integer, List<Transaction>> stockGroups = new HashMap<>();
+    }
 
-                        for (Transaction transaction : elements) {
-                            windowData.add(transaction);
-                            stockGroups.computeIfAbsent(transaction.getStockId(), k -> new ArrayList<>()).add(transaction);
-                        }
-                        
-                        // 統合JSONオブジェクトを直接作成
-                        Map<String, Object> combinedResult = new HashMap<>();
-                        combinedResult.put("type", "realTimeAnalysis");
-                        combinedResult.put("timestamp", LocalTime.now().toString());
-                        combinedResult.put("windowStart", Instant.ofEpochMilli(context.window().getStart()).toString());
-                        combinedResult.put("windowEnd", Instant.ofEpochMilli(context.window().getEnd()).toString());
-                        
-                        // 現在の株価情報を追加
-                        Map<String, Object> currentStockPrices = new HashMap<>();
-                        for (Map.Entry<Integer, Double> entry : stockPriceMap.entrySet()) {
-                            currentStockPrices.put(String.valueOf(entry.getKey()), entry.getValue());
-                        }
-                        combinedResult.put("currentStockPrices", currentStockPrices);
 
-                        // ウィンドウ内の取引データをすべて追加
-                        List<Map<String, Object>> transactionList = new ArrayList<>();
-                        for (Transaction transaction : windowData) {
-                            Map<String, Object> transactionData = new HashMap<>();
-                            transactionData.put("shareholderId", transaction.getShareholderId());
-                            transactionData.put("stockId", transaction.getStockId());
-                            transactionData.put("quantity", transaction.getQuantity());
-                            transactionData.put("timestamp", transaction.getTimestamp().toString());
-                            transactionList.add(transactionData);
+    private static void processTransactionLine(String line) {
+        // 1. JSON→Transactionへパース
+        TransactionDto dto = gson.fromJson(line, TransactionDto.class);
+        if (dto == null || dto.getShareholderId() <= 0 || dto.getStockId() <= 0) {
+            System.err.println("無効なTransactionデータ: " + line);
+            return;
+        }
+        Transaction transaction = new Transaction(
+            dto.getShareholderId(),
+            dto.getStockId(),
+            dto.getQuantity(),
+            parseTimestamp(dto.getTimestamp())
+        );
+
+        // 追加情報の取得
+        String shareholderName = "";
+        String stockName = "";
+        double currentPrice = 0.0;
+        ShareholderInfo shInfo = ShareholderMetadata.get(transaction.getShareholderId());
+        if (shInfo != null) shareholderName = shInfo.getShareholderName();
+        StockInfo stInfo = StockMetadata.get(transaction.getStockId());
+        if (stInfo != null) stockName = stInfo.getStockName();
+        Double price = stockPriceMap.get(transaction.getStockId());
+        if (price != null) currentPrice = price;
+
+        // Mapにまとめてバッファに追加
+        Map<String, Object> tx = new HashMap<>();
+        tx.put("shareholderId", transaction.getShareholderId());
+        tx.put("shareholderName", shareholderName);
+        tx.put("stockId", transaction.getStockId());
+        tx.put("stockName", stockName);
+        tx.put("quantity", transaction.getQuantity());
+        tx.put("timestamp", transaction.getTimestamp().toString());
+        tx.put("currentPrice", currentPrice);
+        synchronized (bufferLock) {
+            transactionBuffer.add(tx);
+        }
+
+        // 3. ウィンドウ初期化・更新（スレッドセーフ）
+        synchronized (windowLock) {
+            LocalTime[] window = windowRef.get();
+            if (window == null) {
+                LocalTime start = transaction.getTimestamp();
+                LocalTime end = start.plusSeconds(WINDOW_SIZE_SECONDS);
+                window = new LocalTime[] { start, end };
+                windowRef.set(window);
+                System.out.println("Window initialized: " + dtf.format(window[0]) + " to " + dtf.format(window[1]));
+            }
+            window = windowRef.get();
+            // 4. ウィンドウ終了時刻を超えたら集計
+            if (transaction.getTimestamp().isAfter(window[1])) {
+                aggregateAndSend();
+                // ウィンドウをスライド
+                LocalTime newStart = window[0].plusSeconds(SLIDE_SIZE_SECONDS);
+                LocalTime newEnd = window[1].plusSeconds(SLIDE_SIZE_SECONDS);
+                window[0] = newStart;
+                window[1] = newEnd;
+                windowRef.set(window);
+                System.out.println("Window updated: " + dtf.format(window[0]) + " to " + dtf.format(window[1]));
+                // ウィンドウ外のデータをバッファから削除
+                synchronized (bufferLock) {
+                    while (!transactionBuffer.isEmpty()) {
+                        Map<String, Object> first = transactionBuffer.get(0);
+                        String ts = (String) first.get("timestamp");
+                        if (parseTimestamp(ts).isBefore(window[0])) {
+                            transactionBuffer.remove(0);
+                        } else {
+                            break;
                         }
-                        combinedResult.put("transactions", transactionList);
-                        
-                        // トランザクション分析結果を追加
-                        // (既存のStockTimeWindowFunctionのロジックを使用)
-                        // Map<String, Object> transactionAnalysis = new HashMap<>();
-                        // transactionAnalysis.put("totalTransactions", windowData.size());
-                        // transactionAnalysis.put("stocksTraded", stockGroups.size());
-                        // ... 他の分析結果
-                        
-                        // combinedResult.put("transactionAnalysis", transactionAnalysis);
-                        
-                        // 単一の統合JSONとして出力
-                        out.collect(gson.toJson(combinedResult));
                     }
-                })
-                .name("Real-time Combined Analysis");
-
-        // 統合ストリームのみをWebSocketに送信
-        combinedAnalysisStream.addSink(new StockRichSinkFunction("localhost", 3000))
-                .name("WebSocket Sink");
-
-        // デバッグ用プリント（コメントアウトを解除して確認）
-        // stockPriceJsonStream.print("StockPrice JSON");
-        // transactionAnalysisStream.print("Transaction Analysis");
-        // combinedJsonStream.print("Combined Stream");
-
-        try {
-            env.execute("Real-time Stock Analysis");
-        } catch (Exception e) {
-            System.err.println("Flinkジョブ実行エラー: " + e.getMessage());
-            e.printStackTrace();
+                }
+            }
         }
     }
 
+    // 集計・WebSocket送信メソッド
+    private static void aggregateAndSend() {
+        ArrayList<Map<String, Object>> bufferCopy;
+        synchronized (bufferLock) {
+            bufferCopy = new ArrayList<>(transactionBuffer);
+        }
+        if (bufferCopy.isEmpty())
+            return;
+        
+        // 結果をJSON化してWebSocket送信
+        LocalTime[] window = windowRef.get();
+        Map<String, Object> result = new HashMap<>();
+        result.put("windowStart", window != null ? window[0].toString() : "");
+        result.put("windowEnd", window != null ? window[1].toString() : "");
+        // 株データ全体
+        List<Map<String, Object>> stockPriceList = new ArrayList<>();
+        for (Map.Entry<Integer, Double> entry : stockPriceMap.entrySet()) {
+            Map<String, Object> sp = new HashMap<>();
+            sp.put("stockId", entry.getKey());
+            sp.put("price", entry.getValue());
+            stockPriceList.add(sp);
+        }
+        result.put("stockPrices", stockPriceList);
+        // 取引データ全体
+        result.put("transactions", bufferCopy);
+        sendToWebClients(gson.toJson(result));
+    }
 
     // データ分析メソッド
     private static void performAnalysis() {

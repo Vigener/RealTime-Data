@@ -17,7 +17,8 @@ public class RunConfiguration {
             
             // メインアプリケーション起動
             System.out.println("StockProcessor を起動中...");
-            StockProcessor.main(args);
+            // StockProcessor.main(args);
+            StockProcessorNoFlink.main(args);
             
         } catch (Exception e) {
             System.err.println("システム起動エラー: " + e.getMessage());

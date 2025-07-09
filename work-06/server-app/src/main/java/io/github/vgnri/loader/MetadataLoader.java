@@ -74,7 +74,9 @@ public class MetadataLoader {
             String line;
             int lineNumber = 0;
             
-            while ((line = reader.readLine()) != null) {
+            int maxLines = 6;
+            while ((line = reader.readLine()) != null && lineNumber < maxLines) {
+            // while ((line = reader.readLine()) != null) { // 本番用
                 lineNumber++;
                 
                 // ヘッダ行をスキップ

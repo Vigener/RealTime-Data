@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import ToggleButton from "react-bootstrap/esm/ToggleButton";
 import "./App.css";
-import AggregationGraph from "./components/AggregationGraph";
-import AggregationTable from "./components/AggregationTable";
-import StockTable from "./components/StockTable";
+import PortfolioSection from "./components/PortfolioSection";
+import TransactionHistorySection from "./components/TransactionHistorySection";
 import type {
   AggResult,
   ReceivedData,
-  SlideWindowConfig,
+  ShareholderIdNameMap,
   Stock,
-  WindowType,
+  TransactionWithInfo,
+  WindowType
 } from "./DataType";
 
 function App() {
@@ -24,9 +24,11 @@ function App() {
   const [rawData, setRawData] = useState<string>("");
   
   const [stockData, setStockData] = useState<Stock[]>([]);
+  const [transactionData, setTransactionData] = useState<TransactionWithInfo[]>([]);
   const [aggregationData, setAggregationData] = useState<AggResult[]>([]);
   const [windowStart, setWindowStart] = useState<string>("");
   const [windowEnd, setWindowEnd] = useState<string>("");
+  const [shareholderIdNameMap, setShareholderIdNameMap] = useState<ShareholderIdNameMap>();
 
   useEffect(() => {
     let connection: WebSocket | null = null;
@@ -40,34 +42,23 @@ function App() {
 
       connection.onmessage = (event) => {
         // Try to format JSON data, otherwise use raw data
-        try {
-          const parsed = JSON.parse(event.data);
-          setRawData(JSON.stringify(parsed, null, 2));
-        } catch {
-          setRawData(event.data);
+        // まずJSON形式にできるか確認する。できなかったらRawDataとして
+      try {
+        const received: ReceivedData = JSON.parse(event.data);
+        setRawData(JSON.stringify(received, null, 2));
+        setStockData(received.stockPrices || []);
+        setTransactionData(received.transactions || []);
+        // setAggregationData(received.transactions || []);
+        setWindowStart(received.windowStart || "");
+        setWindowEnd(received.windowEnd || "");
+        if (received.ShareholderIdNameMap !== undefined) {
+          setShareholderIdNameMap(received.ShareholderIdNameMap);
         }
-        try {
-          const received: ReceivedData = JSON.parse(event.data);
-          setStockData(received.WindowRecords || []);
-          setAggregationData(received.AggregationResults || []);
-          setWindowStart(received.WindowStart || "");
-          setWindowEnd(received.WindowEnd || "");
-          console.log("Received data:", received);
-        } catch {
-          let data = event.data;
-          if (typeof data === "string" && data.startsWith("###")) {
-            data = data.slice(3);
-          }
-          try {
-            const received: SlideWindowConfig = JSON.parse(data);
-            console.log("Received window config:", received);
-            setWindowType(received.WindowType);
-            setWindowSize(received.WindowSize);
-            setSlideSize(received.SlideSize);
-          } catch {
-            if (event.data) console.log("Received non-JSON data:", event.data);
-          }
-        }
+        console.log("Received data:", received);
+      } catch {
+        setRawData(event.data);
+        if (event.data) console.log("Received non-JSON data:", event.data);
+      }
       };
 
       connection.onerror = (error) => {
@@ -93,95 +84,30 @@ function App() {
 
   return (
     <div className="App">
-      <h1>課題 6</h1>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "right",
-        }}
-      >
-        <div style={{ display: "flex", gap: "16px" }}>
-          <div>
-            {(windowType !== undefined) && (
-              <div>
-                <strong>Window Type: </strong> {windowType}
-              </div>
-            )}
-            {(windowSize !== 0) && (
-              <div>
-                <strong>Window Size: </strong> {windowSize}
-              </div>
-            )}
-            {(slideSize !== 0) && (
-              <div>
-                <strong>Slide Size: </strong> {slideSize}
-              </div>
-            )}
-          </div>
-        </div>
+      <h1 id="title">課題 6</h1>
+      <div id="connection-button-section">
+        <ToggleButton
+          id="toggle-connection"
+          type="checkbox"
+          variant="outline-primary"
+          checked={is_trying_connect}
+          value="1"
+          onChange={(e) => setIsTryingConnect(e.currentTarget.checked)}
+        >
+          {is_trying_connect ? "接続中" : "接続"}
+        </ToggleButton>
       </div>
       <div style={{ display: "flex" }}>
-        <div style={{ flex: 3, paddingRight: "16px" }}>
-          <h2>Windowデータ</h2>
-          <ToggleButton
-            id="toggle-connection"
-            type="checkbox"
-            variant="outline-primary"
-            checked={is_trying_connect}
-            value="1"
-            onChange={(e) => setIsTryingConnect(e.currentTarget.checked)}
-            className="mb-2"
-          >
-            {is_trying_connect ? "接続中" : "接続"}
-          </ToggleButton>
-          {(windowStart || windowEnd) && (
-            <div>
-              <div>
-                <strong>Window Start: </strong> {windowStart}
-              </div>
-              <div>
-                <strong>Window End: </strong> {windowEnd}
-              </div>
-            </div>
-          )}
-          <StockTable StockData={stockData} />
-        </div>
-        <div
-          style={{
-            flex: 7,
-            borderLeft: "1px solid #ccc",
-            paddingLeft: "16px",
-          }}
-        >
-          <h2>集計結果</h2>
-          <AggregationGraph receivedData={aggregationData} />
-          <div style={{ borderTop: "1px solid #ccc", paddingTop: "16px" }}>
-            <ToggleButton
-              className="mb-2"
-              id="toggle-check"
-              type="checkbox"
-              variant="outline-primary"
-              checked={checked}
-              value="1"
-              onChange={(e) => setChecked(e.currentTarget.checked)}
-            >
-              {checked ? "集計データ非表示" : "集計データ表示"}
-            </ToggleButton>
-            {checked && (
-              <div>
-                <h3>集計データ</h3>
-                <div
-                  style={{
-                    maxWidth: "80%",
-                    margin: "0 auto",
-                  }}
-                >
-                  <AggregationTable receivedData={aggregationData} />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <PortfolioSection
+          shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
+        />
+        <TransactionHistorySection
+          windowStart={windowStart}
+          windowEnd={windowEnd}
+          transactionData={transactionData}
+          isTryingConnect={is_trying_connect}
+          setIsTryingConnect={setIsTryingConnect}
+        />
       </div>
       <div id="raw-data">
         <h3>Raw Data</h3>
