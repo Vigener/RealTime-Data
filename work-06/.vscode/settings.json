@@ -1,0 +1,14 @@
+{
+  "java.project.sourcePaths": [
+    "server-app/src/main/java",
+    "server-app/src/test/java"
+  ],
+  "java.project.outputPath": "server-app/target/classes",
+  "java.project.referencedLibraries": [
+    "server-app/target/dependency/*.jar"
+  ],
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.configuration.workspaceCacheLimit": 90,
+  "java.compile.nullAnalysis.mode": "automatic",
+  "maven.executable.path": "/usr/local/sdkman/candidates/maven/current/bin/mvn"
+}
