@@ -1,19 +1,15 @@
 import React from "react";
-import type { TransactionWithInfo } from "../DataType";
+import type { TransactionHistory } from "../DataType";
 import TransactionTable from "./TransactionTable";
 
 interface Props {
   isTryingConnect: boolean;
   setIsTryingConnect: (checked: boolean) => void;
-  windowStart: string;
-  windowEnd: string;
-  transactionData: TransactionWithInfo[];
+  transactionHistory: TransactionHistory | null;
 }
 
 const TransactionHistorySection: React.FC<Props> = ({
-  windowStart,
-  windowEnd,
-  transactionData,
+  transactionHistory
 }) => {
   return (
     <div style={{ flex: 5, paddingLeft: "16px" }}>
@@ -29,17 +25,17 @@ const TransactionHistorySection: React.FC<Props> = ({
       >
         {isTryingConnect ? "接続中" : "接続"}
       </ToggleButton> */}
-      {(windowStart || windowEnd) && (
+      {transactionHistory && (transactionHistory.windowStart || transactionHistory.windowEnd) && (
         <div>
           <div>
-            <strong>Window Start: </strong> {windowStart}
+            <strong>Window Start: </strong> {transactionHistory.windowStart}
           </div>
           <div>
-            <strong>Window End: </strong> {windowEnd}
+            <strong>Window End: </strong> {transactionHistory.windowEnd}
           </div>
         </div>
       )}
-      <TransactionTable TransactionData={transactionData} />
+      <TransactionTable TransactionData={transactionHistory ? transactionHistory.transactions : []} />
     </div>
   );
 };

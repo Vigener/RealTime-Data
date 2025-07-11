@@ -9,6 +9,11 @@ import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
+import io.github.vgnri.StockProcessor;
+
 public class WebsocketServer extends WebSocketServer implements Serializable {
     private static final long serialVersionUID = 1L;
     private static final int DEFAULT_PORT = 3000;
@@ -48,7 +53,23 @@ public class WebsocketServer extends WebSocketServer implements Serializable {
     @Override
     public void onMessage(WebSocket conn, String message) {
         System.out.println("Message from client: " + message);
-        broadcast("Message from server: " + message);
+        try {
+            JsonObject obj = JsonParser.parseString(message).getAsJsonObject();
+            String type = obj.has("type") ? obj.get("type").getAsString() : "";
+            if ("select_shareholder".equals(type) && obj.has("shareholderId")) { // 受信したJSONのtypeが"select_sharelolder"ならポートフォリオのサマリーJSONを呼び出して計算し返信する。
+                int shareholderId = obj.get("shareholderId").getAsInt();
+                // StockProcessorNoFlinkの集計メソッドを呼び出し
+                String resultJson = StockProcessor.getPortfolioSummaryJson(shareholderId);
+                if (resultJson != null) {
+                    conn.send(resultJson); // 選択したクライアントだけに返信
+                }
+            } else {
+                // その他のメッセージは既存通り
+                broadcast("Message from server: " + message);
+            }
+        } catch (Exception e) {
+            System.err.println("WebSocket受信エラー: " + e.getMessage());
+        }
     }
 
     @Override

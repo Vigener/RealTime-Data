@@ -1,63 +1,78 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ToggleButton from "react-bootstrap/esm/ToggleButton";
 import "./App.css";
 import PortfolioSection from "./components/PortfolioSection";
 import TransactionHistorySection from "./components/TransactionHistorySection";
-import type {
-  AggResult,
-  ReceivedData,
-  ShareholderIdNameMap,
-  Stock,
-  TransactionWithInfo,
-  WindowType
+import {
+  type PortfolioSummary,
+  type ServerMessage,
+  type ShareholderIdNameMap,
+  type TransactionHistory
 } from "./DataType";
 
 function App() {
   
-  const [checked, setChecked] = useState(false);
+  // const [checked, setChecked] = useState(false);
   const [is_trying_connect, setIsTryingConnect] = useState(false);
   
-  const [windowType, setWindowType] = useState<WindowType>();
-  const [windowSize, setWindowSize] = useState<number>(0);
-  const [slideSize, setSlideSize] = useState<number>(0);
+  // const [windowType, setWindowType] = useState<WindowType>();
+  // const [windowSize, setWindowSize] = useState<number>(0);
+  // const [slideSize, setSlideSize] = useState<number>(0);
 
   const [rawData, setRawData] = useState<string>("");
   
-  const [stockData, setStockData] = useState<Stock[]>([]);
-  const [transactionData, setTransactionData] = useState<TransactionWithInfo[]>([]);
-  const [aggregationData, setAggregationData] = useState<AggResult[]>([]);
-  const [windowStart, setWindowStart] = useState<string>("");
-  const [windowEnd, setWindowEnd] = useState<string>("");
+  // const [stockData, setStockData] = useState<Stock[]>([]);
+  // const [transactionData, setTransactionData] = useState<TransactionWithInfo[]>([]);
+  // const [aggregationData, setAggregationData] = useState<AggResult[]>([]);
+  // const [windowStart, setWindowStart] = useState<string>("");
+  // const [windowEnd, setWindowEnd] = useState<string>("");
   const [shareholderIdNameMap, setShareholderIdNameMap] = useState<ShareholderIdNameMap>();
+
+  // 取引履歴用
+  const [transactionHistory, setTransactionHistory] = useState<TransactionHistory | null>(null);
+
+  // ポートフォリオ用
+  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
+
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     let connection: WebSocket | null = null;
 
     const connectWebSocket = () => {
       connection = new WebSocket("ws://localhost:3000");
+      wsRef.current = connection; // ここでrefにセット
 
       connection.onopen = () => {
         console.log("WebSocket connected");
       };
 
       connection.onmessage = (event) => {
-        // Try to format JSON data, otherwise use raw data
         // まずJSON形式にできるか確認する。できなかったらRawDataとして
       try {
-        const received: ReceivedData = JSON.parse(event.data);
-        setRawData(JSON.stringify(received, null, 2));
-        setStockData(received.stockPrices || []);
-        setTransactionData(received.transactions || []);
-        // setAggregationData(received.transactions || []);
-        setWindowStart(received.windowStart || "");
-        setWindowEnd(received.windowEnd || "");
-        if (received.ShareholderIdNameMap !== undefined) {
-          setShareholderIdNameMap(received.ShareholderIdNameMap);
+        const msg: ServerMessage = JSON.parse(event.data);
+        setRawData(JSON.stringify(msg, null, 2));
+        switch (msg.type) {
+          case "portfolio_summary":
+            setPortfolioSummary(msg);
+            break;
+          case "transaction_history":
+            setTransactionHistory(msg);
+            // setTransactionData(msg.transactions || []);
+            // setWindowStart(msg.windowStart || "");
+            // setWindowEnd(msg.windowEnd || "");
+            break;
+          case "ShareholderIdNameMap":
+            setShareholderIdNameMap(msg.ShareholderIdNameMap);
+            break;
+          default:
+            break;
         }
-        console.log("Received data:", received);
+        // setAggregationData(msg.transactions || []);
+        console.log("msg data:", msg);
       } catch {
         setRawData(event.data);
-        if (event.data) console.log("Received non-JSON data:", event.data);
+        if (event.data) console.log("msg non-JSON data:", event.data);
       }
       };
 
@@ -79,6 +94,7 @@ function App() {
 
     return () => {
       if (connection) connection.close();
+      wsRef.current = null;
     };
   }, [is_trying_connect]);
 
@@ -100,11 +116,11 @@ function App() {
       <div style={{ display: "flex" }}>
         <PortfolioSection
           shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
+          ws={wsRef.current}
+          portfolioSummary={portfolioSummary}
         />
         <TransactionHistorySection
-          windowStart={windowStart}
-          windowEnd={windowEnd}
-          transactionData={transactionData}
+          transactionHistory={transactionHistory}
           isTryingConnect={is_trying_connect}
           setIsTryingConnect={setIsTryingConnect}
         />
@@ -117,7 +133,7 @@ function App() {
           borderRadius: "4px",
           overflow: "auto"
         }}>
-          {rawData || "No data received yet"}
+          {rawData || "No data msg yet"}
         </pre>
       </div>
     </div>
