@@ -28,7 +28,7 @@ public class StockPrice implements Serializable {
     private static final long serialVersionUID = 1L;
     
     private int stockId;
-    private double price;
+    private int price;
     private LocalTime timestamp;
 
     private static final DateTimeFormatter DISPLAY_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss.SS");
@@ -54,7 +54,7 @@ public class StockPrice implements Serializable {
     // 株IDのリストを保持（順序管理用）
     private static List<Integer> stockIdList = new ArrayList<>();
 
-    public StockPrice(int stockId, double price, LocalTime timestamp) {
+    public StockPrice(int stockId, int price, LocalTime timestamp) {
         this.stockId = stockId;
         this.price = price;
         this.timestamp = timestamp;
@@ -65,7 +65,7 @@ public class StockPrice implements Serializable {
         return stockId;
     }
 
-    public double getPrice() {
+    public int getPrice() {
         return price;
     }
 
@@ -144,7 +144,7 @@ public class StockPrice implements Serializable {
                         stockIdList.add(stockId);  // 順序を保持
                         
                         // 初期価格を範囲内のランダム値で設定
-                        double initialPrice = min + (max - min) * random.nextDouble();
+                        int initialPrice = (int) (min + (max - min) * random.nextDouble());
                         currentPrices.put(stockId, new StockPrice(stockId, initialPrice, LocalTime.now()));
                         
                         readStockCount++;  // 正常に読み込めた場合のみカウント
@@ -194,7 +194,7 @@ public class StockPrice implements Serializable {
             stockRanges.put(i, new StockRange(min, max));
             stockIdList.add(i);
             
-            double initialPrice = min + (max - min) * random.nextDouble();
+            int initialPrice = (int) (min + (max - min) * random.nextDouble());
             currentPrices.put(i, new StockPrice(i, initialPrice, LocalTime.now()));
         }
         
@@ -252,7 +252,7 @@ public class StockPrice implements Serializable {
             StockRange range = stockRanges.get(stockId);
             
             if (range != null) {
-                double newPrice = range.min + (range.max - range.min) * random.nextDouble();
+                int newPrice = (int) (range.min + (range.max - range.min) * random.nextDouble());
                 
                 StockPrice updatedPrice = new StockPrice(stockId, newPrice, currentTime);
                 currentPrices.put(stockId, updatedPrice);

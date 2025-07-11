@@ -56,15 +56,11 @@ public class WebsocketServer extends WebSocketServer implements Serializable {
         try {
             JsonObject obj = JsonParser.parseString(message).getAsJsonObject();
             String type = obj.has("type") ? obj.get("type").getAsString() : "";
-            if ("select_shareholder".equals(type) && obj.has("shareholderId")) { // 受信したJSONのtypeが"select_sharelolder"ならポートフォリオのサマリーJSONを呼び出して計算し返信する。
+            if ("select_shareholder".equals(type) && obj.has("shareholderId")) {
                 int shareholderId = obj.get("shareholderId").getAsInt();
-                // StockProcessorNoFlinkの集計メソッドを呼び出し
-                String resultJson = StockProcessor.getPortfolioSummaryJson(shareholderId);
-                if (resultJson != null) {
-                    conn.send(resultJson); // 選択したクライアントだけに返信
-                }
+                // IDをStockProcessorに伝達（送信はaggregateAndSendで行う）
+                StockProcessor.setSelectedShareholderId(shareholderId);
             } else {
-                // その他のメッセージは既存通り
                 broadcast("Message from server: " + message);
             }
         } catch (Exception e) {

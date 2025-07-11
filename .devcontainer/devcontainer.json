@@ -1,0 +1,53 @@
+{
+  "name": "Java-React-Flink Development Environment",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "11",
+      "installMaven": true,
+      "installGradle": false
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "redhat.java",
+        "vscjava.vscode-maven",
+        "bradlc.vscode-tailwindcss",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-typescript-next",
+        "formulahendry.auto-rename-tag",
+        "ms-vscode.vscode-json"
+      ],
+      "settings": {
+        "java.configuration.updateBuildConfiguration": "automatic",
+        "java.server.launchMode": "Standard",
+        "maven.executable.path": "/usr/local/sdkman/candidates/maven/current/bin/mvn"
+      }
+    }
+  },
+  "forwardPorts": [3000, 8080, 8081],
+  "portsAttributes": {
+    "3000": {
+      "label": "Vite Dev Server",
+      "onAutoForward": "notify"
+    },
+    "8080": {
+      "label": "Java WebSocket Server",
+      "onAutoForward": "notify"
+    },
+    "8081": {
+      "label": "Flink Web UI",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "npm install && mvn clean compile",
+  "remoteUser": "vscode",
+  "workspaceFolder": "/workspace"
+}

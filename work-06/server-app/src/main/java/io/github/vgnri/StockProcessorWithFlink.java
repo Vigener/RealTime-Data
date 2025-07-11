@@ -41,7 +41,7 @@ public class StockProcessorWithFlink {
     private static final AtomicReference<List<Transaction>> latestTransactions = new AtomicReference<>();
     
     // 統計情報用（例）
-    private static final ConcurrentHashMap<Integer, Double> stockPriceMap = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Integer, Integer> stockPriceMap = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Integer, Integer> transactionCountMap = new ConcurrentHashMap<>();
 
     // メタデータ・管理構造 ---
@@ -64,14 +64,14 @@ public class StockProcessorWithFlink {
         private int stockId;
         
         @SerializedName("price")
-        private double price;
+        private int price;
         
         @SerializedName("timestamp")
         private String timestamp;  // String型で受け取る
         
         // getters
         public int getStockId() { return stockId; }
-        public double getPrice() { return price; }
+        public int getPrice() { return price; }
         public String getTimestamp() { return timestamp; }
     }
 
@@ -327,7 +327,7 @@ public class StockProcessorWithFlink {
                         
                         // 現在の株価情報を追加
                         Map<String, Object> currentStockPrices = new HashMap<>();
-                        for (Map.Entry<Integer, Double> entry : stockPriceMap.entrySet()) {
+                        for (Map.Entry<Integer, Integer> entry : stockPriceMap.entrySet()) {
                             currentStockPrices.put(String.valueOf(entry.getKey()), entry.getValue());
                         }
                         combinedResult.put("currentStockPrices", currentStockPrices);
