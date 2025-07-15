@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Dropdown, DropdownButton, Table } from "react-bootstrap";
 import type { PortfolioSummary, ShareholderIdNameMap } from "../DataType";
 
@@ -8,7 +8,11 @@ interface Props {
   portfolioSummary?: PortfolioSummary | null;
 }
 
-const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolioSummary }) => {
+const PortfolioSection = React.memo(function PortfolioSection({ 
+  shareholderIdNameMap, 
+  ws, 
+  portfolioSummary 
+}: Props) {
   const map = shareholderIdNameMap ?? {};
   // 選択中のIDをローカルステートで管理
   const [selectedId, setSelectedId] = useState<number>(0);
@@ -28,6 +32,24 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
     }
 
   }
+
+  // メモ化で不要な再レンダリングを防ぐ
+  const stockRows = useMemo(() => {
+    if (!portfolioSummary?.stocks) return [];
+    
+    return portfolioSummary.stocks.map(stock => (
+      <tr key={stock.stockId}>
+        <td>{stock.stockId}</td>
+        <td>{stock.stockName}</td>
+        <td>{stock.quantity.toLocaleString()}</td>
+        <td>{stock.averageCost.toLocaleString()}円</td>
+        <td>{stock.currentPrice.toLocaleString()}円</td>
+        <td style={{ color: stock.profit >= 0 ? 'green' : 'red' }}>
+          {stock.profit.toLocaleString()}円
+        </td>
+      </tr>
+    ));
+  }, [portfolioSummary?.stocks]);
 
   return (
     <div
@@ -52,42 +74,39 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
       </DropdownButton>
       {portfolioSummary && (
         <div>
-          <h3>全体資産: {portfolioSummary.totalAsset}</h3>
-          <h3>評価損益: {portfolioSummary.totalProfit}</h3>
+          <h3>全体資産: {portfolioSummary.totalAsset.toLocaleString()}円</h3>
+          <h3>評価損益: {portfolioSummary.totalProfit.toLocaleString()}円</h3>
           <h3>評価損益率: {(portfolioSummary.profitRate * 100).toFixed(2)}%</h3>
-          <Table
-            id="PortfolioTable"
-            striped
-            bordered
-            hover
+          <div
             style={{
-              fontSize: "1rem",
-              marginBottom: 0,
+              maxHeight: `800px`,
+              overflowY: "auto",
             }}
           >
-            <thead>
-              <tr>
-                <th>株式ID</th>
-                <th>株式名</th>
-                <th>保有株数</th>
-                <th>平均取得単価</th>
-                <th>現在の株価</th>
-                <th>評価損益</th>
-              </tr>
-            </thead>
-            <tbody>
-              {portfolioSummary.stocks.map(stock => (
-                <tr key={stock.stockId}>
-                  <td>{stock.stockId}</td>
-                  <td>{stock.stockName}</td>
-                  <td>{stock.quantity}</td>
-                  <td>{stock.averageCost}</td>
-                  <td>{stock.currentPrice}</td>
-                  <td>{stock.profit}</td>
+            <Table
+              striped
+              bordered
+              hover
+              style={{
+                fontSize: "1rem",
+                marginBottom: 0,
+              }}
+            >
+              <thead>
+                <tr>
+                  <th>株式ID</th>
+                  <th>株式名</th>
+                  <th>保有株数</th>
+                  <th>平均取得単価</th>
+                  <th>現在の株価</th>
+                  <th>評価損益</th>
                 </tr>
-              ))}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {stockRows}
+              </tbody>
+            </Table>
+          </div>
         </div>
       )}
       {/* <div>
@@ -96,6 +115,6 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
       
     </div>
   );
-};
+});
 
 export default PortfolioSection;

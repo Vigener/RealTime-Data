@@ -1,0 +1,49 @@
+{
+    // IntelliSense を使用して利用可能な属性を学べます。
+    // 既存の属性の説明をホバーして表示します。
+    // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Current File",
+            "request": "launch",
+            "mainClass": "${file}"
+        },
+        {
+            "type": "java",
+            "name": "RunConfiguration",
+            "request": "launch",
+            "mainClass": "io.github.vgnri.RunConfiguration",
+            "projectName": "server-app"
+        },
+        {
+            "type": "java",
+            "name": "StockProcessor",
+            "request": "launch",
+            "mainClass": "io.github.vgnri.StockProcessor",
+            "projectName": "server-app"
+        },
+        {
+            "type": "java",
+            "name": "StockProcessorWithFlink",
+            "request": "launch",
+            "mainClass": "io.github.vgnri.StockProcessorWithFlink",
+            "projectName": "server-app"
+        },
+        {
+            "type": "java",
+            "name": "StockPrice",
+            "request": "launch",
+            "mainClass": "io.github.vgnri.model.StockPrice",
+            "projectName": "server-app"
+        },
+        {
+            "type": "java",
+            "name": "Transaction",
+            "request": "launch",
+            "mainClass": "io.github.vgnri.model.Transaction",
+            "projectName": "server-app"
+        }
+    ]
+}

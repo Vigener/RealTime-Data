@@ -114,7 +114,7 @@ public class Transaction implements Serializable {
         for (int i = 0; i < Config.getCurrentTradesPerUpdate(); i++) {
             int shareholderId = random.nextInt(Config.getCurrentShareholderCount()) + 1; // 1から現在の株主数の株主ID
             int stockId = random.nextInt(Config.getCurrentStockCount()) + 1; // 1から現在の銘柄数の株ID
-            int quantity = random.nextInt(1011) - 10; // -10から1000の範囲の数量
+            int quantity = random.nextInt(111) - 10; // -10から100の範囲の数量
             LocalTime timestamp = currentTime;
 
             Transaction transaction = new Transaction(shareholderId, stockId, quantity, timestamp);

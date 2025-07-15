@@ -1,5 +1,8 @@
 package io.github.vgnri.config;
 
+import java.io.File;
+import java.net.URL;
+
 /**
  * プロジェクト全体で使用する設定値を管理するクラス
  */
@@ -12,14 +15,17 @@ public class Config {
     
     // 株価関連の設定
     public static final int MAX_STOCK_COUNT = 3000;        // 最大銘柄数
-    public static final int DEFAULT_STOCK_COUNT = 5;       // デフォルト銘柄数
+    public static final int DEFAULT_STOCK_COUNT = 100;       // デフォルト銘柄数
+    // public static final int DEFAULT_STOCK_COUNT = 5;       // デフォルト銘柄数
     
     // 株主関連の設定
     public static final int MAX_SHAREHOLDER_COUNT = 5194; // 最大株主数
-    public static final int DEFAULT_SHAREHOLDER_COUNT = 5; // デフォルト株主数
+    public static final int DEFAULT_SHAREHOLDER_COUNT = 50; // デフォルト株主数
+    // public static final int DEFAULT_SHAREHOLDER_COUNT = 5; // デフォルト株主数
 
     // 株取引関連の設定
     public static final int MAX_TRADES_PER_UPDATE = 1000;     // 最大取引数(更新ごとの)
+    // public static final int DEFAULT_TRADES_PER_UPDATE = 50;  // デフォルト取引数(更新ごとの)
     public static final int DEFAULT_TRADES_PER_UPDATE = 10;  // デフォルト取引数(更新ごとの)
 
     // 現在の設定値（実行時に変更可能）
@@ -34,20 +40,50 @@ public class Config {
     public static final int TRADE_UPDATE_INTERVAL_MS = 100;
 
     // スライディングウィンドウ関連(Time Window)
+    // public static final int SLIDING_WINDOW_SIZE_MS = 200; // スライディングウィンドウのサイズ
     public static final int SLIDING_WINDOW_SIZE_MS = 1000; // スライディングウィンドウのサイズ(1000ms = 1秒)
+    // public static final int SLIDING_WINDOW_STEP_MS = 100; // スライディングウィンドウのステップ
     public static final int SLIDING_WINDOW_STEP_MS = 500; // スライディングウィンドウのステップ(500ms = 0.5秒)
 
 
 
-    // CSVファイルパス
+    // CSVファイルパス - 動的に解決
+    private static String getResourcePath(String resourceName) {
+        // 1. クラスパスから探す
+        URL resource = Config.class.getClassLoader().getResource(resourceName);
+        if (resource != null) {
+            return resource.getPath();
+        }
+        
+        // 2. 現在のワーキングディレクトリから探す
+        String[] possiblePaths = {
+            "src/main/resources/" + resourceName,
+            "server-app/src/main/resources/" + resourceName,
+            "resources/" + resourceName,
+            resourceName
+        };
+        
+        for (String path : possiblePaths) {
+            File file = new File(path);
+            if (file.exists()) {
+                return path;
+            }
+        }
+        
+        // 3. フォールバック（デフォルトパス）
+        System.err.println("Warning: " + resourceName + " not found, using default path");
+        return "src/main/resources/" + resourceName;
+    }
+    
     // 株価データ
-    public static final String STOCK_PRICE_CSV_PATH = "src/main/resources/stock_price_data.csv";
+    public static final String STOCK_PRICE_CSV_PATH = getResourcePath("stock_price_data.csv");
     // 株メタデータ
-    public static final String STOCK_META_CSV_PATH = "src/main/resources/stock_metadata.csv";
+    public static final String STOCK_META_CSV_PATH = getResourcePath("stock_metadata.csv");
     // 株主データ
-    public static final String SHAREHOLDER_CSV_PATH = "src/main/resources/shareholder_metadata.csv";
+    public static final String SHAREHOLDER_CSV_PATH = getResourcePath("shareholder_metadata.csv");
     // つくば市のデータ
-    public static final String TSUKUBA_CSV_PATH = "src/main/resources/tsukuba_metadata.csv";
+    public static final String TSUKUBA_CSV_PATH = getResourcePath("tsukuba_metadata.csv");
+    
     public static final int WEBSOCKET_PORT = 3000; // WebSocketのポート番号
 
 

@@ -13,8 +13,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.eclipse.collections.impl.factory.primitive.DoubleIntMaps;
-
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
@@ -45,6 +43,23 @@ public class StockProcessor {
     private static final ConcurrentHashMap<Integer, ShareholderInfo> ShareholderMetadata = new ConcurrentHashMap<>();
     // 株主ID -> ポートフォリオ
     private static final ConcurrentHashMap<Integer, Portfolio> PortfolioManager = new ConcurrentHashMap<>();
+    
+    // ウィンドウ管理用（スレッドセーフ）
+    private static final int WINDOW_SIZE_SECONDS = 5;
+    private static final int SLIDE_SIZE_SECONDS = 1;
+    private static final Object windowLock = new Object();
+    private static final Object bufferLock = new Object();
+    // Transaction情報を格納するバッファ（Map型で拡張情報も含める）
+    private static final java.util.concurrent.CopyOnWriteArrayList<Map<String, Object>> transactionBuffer = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("HH:mm:ss.SS");
+    private static final AtomicReference<LocalTime[]> windowRef = new AtomicReference<>(null);
+
+    // 1. グローバル変数追加
+    // private static final ConcurrentHashMap<Integer, Map<Integer, PortfolioEntry>> portfolioMap = new ConcurrentHashMap<>();
+
+    // 選択中株主ID
+    private static final AtomicReference<Integer> selectedShareholderId = new AtomicReference<>(null);
+
     // 取引履歴（時系列）
     private static final List<Transaction> TransactionHistory = java.util.Collections
             .synchronizedList(new java.util.ArrayList<>());
@@ -194,19 +209,6 @@ public class StockProcessor {
         }
     }
 
-    // ウィンドウ管理用（スレッドセーフ）
-    private static final int WINDOW_SIZE_SECONDS = 5;
-    private static final int SLIDE_SIZE_SECONDS = 1;
-    private static final Object windowLock = new Object();
-    private static final Object bufferLock = new Object();
-    // Transaction情報を格納するバッファ（Map型で拡張情報も含める）
-    private static final java.util.concurrent.CopyOnWriteArrayList<Map<String, Object>> transactionBuffer = new java.util.concurrent.CopyOnWriteArrayList<>();
-    private static final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("HH:mm:ss.SS");
-    private static final AtomicReference<LocalTime[]> windowRef = new AtomicReference<>(null);
-
-    // 1. グローバル変数追加
-    private static final ConcurrentHashMap<Integer, Map<Integer, PortfolioEntry>> portfolioMap = new ConcurrentHashMap<>();
-    private static final AtomicReference<Integer> selectedShareholderId = new AtomicReference<>(null);
 
     // 選択中IDをセットするメソッド追加
     public static void setSelectedShareholderId(int shareholderId) {
@@ -425,7 +427,7 @@ public class StockProcessor {
         // 追加情報の取得
         String shareholderName = "";
         String stockName = "";
-        double currentPrice = 0.0;
+        int currentPrice = 0;
         ShareholderInfo shInfo = ShareholderMetadata.get(transaction.getShareholderId());
         if (shInfo != null)
             shareholderName = shInfo.getShareholderName();
@@ -436,6 +438,9 @@ public class StockProcessor {
         // System.out.println("current_price"+price);
         if (price != null)
             currentPrice = price;
+
+        // ポートフォリオ更新
+        updatePortfolio(transaction.getShareholderId(), transaction.getStockId(), stockName, transaction.getQuantity(), currentPrice);
 
         // Mapにまとめてバッファに追加
         Map<String, Object> tx = new HashMap<>();
@@ -463,8 +468,8 @@ public class StockProcessor {
             window = windowRef.get();
             // 4. ウィンドウ終了時刻を超えたら集計
             if (transaction.getTimestamp().isAfter(window[1])) {
-                // 取引履歴の集計とポートフォリオの更新とそれらの送信
-                aggregateAndSend();
+
+                // aggregateAndSend(); // 取引履歴の集計とポートフォリオの更新とそれらの送信
                 
                 // ウィンドウをスライド
                 LocalTime newStart = window[0].plusSeconds(SLIDE_SIZE_SECONDS);
@@ -472,22 +477,125 @@ public class StockProcessor {
                 window[0] = newStart;
                 window[1] = newEnd;
                 windowRef.set(window);
-                System.out.println("Window updated: " + dtf.format(window[0]) + " to " + dtf.format(window[1]));
-                // ウィンドウ外のデータをバッファから削除
-                synchronized (bufferLock) {
-                    while (!transactionBuffer.isEmpty()) {
-                        Map<String, Object> first = transactionBuffer.get(0);
-                        String ts = (String) first.get("timestamp");
-                        if (parseTimestamp(ts).isBefore(window[0])) {
-                            transactionBuffer.remove(0);
-                        } else {
-                            break;
-                        }
-                    }
-                }
+
+                // 集計と送信、バッファのクリア
+                aggregateAndSendWithCleanup(newStart); 
+
+
+                // // transactionBufferの先頭部分を表示
+                // synchronized (bufferLock) {
+                //     if (!transactionBuffer.isEmpty()) {
+                //         int displayCount = Math.min(3, transactionBuffer.size()); // 最大3件表示
+                //         System.out.println("Window updated - Buffer contents (" + transactionBuffer.size() + " total):");
+                //         for (int i = 0; i < displayCount; i++) {
+                //             Map<String, Object> txItem = transactionBuffer.get(i);
+                //             System.out.println("  [" + i + "] 株主:" + txItem.get("shareholderId") + 
+                //                              " 銘柄:" + txItem.get("stockId") + 
+                //                              " 数量:" + txItem.get("quantity") + 
+                //                              " 時刻:" + txItem.get("timestamp"));
+                //         }
+                //         if (transactionBuffer.size() > displayCount) {
+                //             System.out.println("  ... and " + (transactionBuffer.size() - displayCount) + " more");
+                //         }
+                //     } else {
+                //         System.out.println("Window updated - Buffer is empty");
+                //     }
+                // }
             }
         }
     }
+
+    // ポートフォリオ更新メソッドを修正
+    private static void updatePortfolio(int shareholderId, int stockId, String stockName, 
+                                       int quantity, double price) {
+        PortfolioManager.computeIfAbsent(shareholderId, k -> new Portfolio(shareholderId))
+                       .addTransaction(stockId, stockName, quantity, price);
+    }
+
+    // 集計・送信・クリーンアップを一括処理するメソッド
+    private static void aggregateAndSendWithCleanup(LocalTime windowStart) {
+        ArrayList<Map<String, Object>> bufferCopy;
+        int removedCount = 0;
+        
+        synchronized (bufferLock) {
+            // 1. 現在のバッファをコピー
+            bufferCopy = new ArrayList<>(transactionBuffer);
+            
+            // 2. ウィンドウ範囲外のTransactionを削除
+            int beforeSize = transactionBuffer.size();
+            transactionBuffer.removeIf(txItem -> {
+                String timestampStr = (String) txItem.get("timestamp");
+                LocalTime txTime = parseTimestamp(timestampStr);
+                return txTime.isBefore(windowStart);
+            });
+            removedCount = beforeSize - transactionBuffer.size();
+            
+            // 3. クリーンアップ後のバッファをコピー（送信用）
+            bufferCopy = new ArrayList<>(transactionBuffer);
+        }
+
+        // デバッグ情報表示
+        System.out.println("Window cleanup: removed " + removedCount + " old transactions, " + 
+                        bufferCopy.size() + " remaining in buffer");
+
+        if (bufferCopy.isEmpty()) {
+            System.out.println("Window updated - Buffer is empty after cleanup");
+            return;
+        }
+
+        // transactionBufferの先頭部分を表示
+        int displayCount = Math.min(3, bufferCopy.size());
+        LocalTime[] windowTimes = windowRef.get();
+        String windowStartStr = (windowTimes != null) ? dtf.format(windowTimes[0]) : "";
+        String windowEndStr = (windowTimes != null) ? dtf.format(windowTimes[1]) : "";
+        System.out.println("Window updated - Buffer contents (" + bufferCopy.size() + " total): [" +
+            windowStartStr + " ～ " + windowEndStr + "]");
+        
+        // 先頭2個
+        int headCount = Math.min(2, bufferCopy.size());
+        for (int i = 0; i < headCount; i++) {
+            Map<String, Object> txItem = bufferCopy.get(i);
+            System.out.println("  [head " + i + "] 株主:" + txItem.get("shareholderId") +
+                       " 銘柄:" + txItem.get("stockId") +
+                       " 数量:" + txItem.get("quantity") +
+                       " 時刻:" + txItem.get("timestamp"));
+        }
+        // 末尾2個
+        int tailCount = Math.min(2, bufferCopy.size());
+        for (int i = bufferCopy.size() - tailCount; i < bufferCopy.size(); i++) {
+            if (i >= headCount) { // 先頭と重複しない場合のみ表示
+            Map<String, Object> txItem = bufferCopy.get(i);
+            System.out.println("  [tail " + (i - (bufferCopy.size() - tailCount)) + "] 株主:" + txItem.get("shareholderId") +
+                       " 銘柄:" + txItem.get("stockId") +
+                       " 数量:" + txItem.get("quantity") +
+                       " 時刻:" + txItem.get("timestamp"));
+            }
+        }
+        if (bufferCopy.size() > (headCount + tailCount)) {
+            System.out.println("  ... and " + (bufferCopy.size() - (headCount + tailCount)) + " more");
+        }
+
+        // 結果をJSON化してWebSocket送信
+        LocalTime[] window = windowRef.get();
+        Map<String, Object> result = new HashMap<>();
+        result.put("type", "transaction_history");
+        result.put("windowStart", (window != null) ? window[0].toString() : "");
+        result.put("windowEnd", (window != null) ? window[1].toString() : "");
+        result.put("transactions", bufferCopy);
+        sendToWebClients(gson.toJson(result));
+
+        // 選択中株主のポートフォリオ更新・送信
+        Integer selectedId = selectedShareholderId.get();
+        if (selectedId != null) {
+            System.out.println("選択中株主ID: " + selectedId);
+            String portfolioJson = getPortfolioSummaryJson(selectedId);
+            if (portfolioJson != null) {
+                System.out.println("ポートフォリオ送信: 株主ID=" + selectedId + " JSON=" + (portfolioJson.length() > 200 ? portfolioJson.substring(0, 200) + "..." : portfolioJson));
+                sendToWebClients(portfolioJson);
+            }
+        }
+    }
+
 
     // 集計・WebSocket送信メソッド(取引履歴送信部分)
     private static void aggregateAndSend() {
@@ -509,8 +617,9 @@ public class StockProcessor {
 
         // 選択中株主のポートフォリオ更新・送信
         Integer selectedId = selectedShareholderId.get();
-        System.out.println("selectedId"+selectedId);
+        // System.out.println("selectedId"+selectedId);
         if (selectedId != null) {
+            System.out.println("選択中株主ID: " + selectedId);
             String portfolioJson = getPortfolioSummaryJson(selectedId);
             if (portfolioJson != null) {
                 System.out.println("ポートフォリオ送信: 株主ID=" + selectedId + " JSON=" + (portfolioJson.length() > 200 ? portfolioJson.substring(0, 200) + "..." : portfolioJson));
@@ -538,35 +647,38 @@ public class StockProcessor {
         }
     }
 
-    // ポート利用可能性チェック用メソッド
-    private static boolean isPortAvailable(int port) {
-        try (java.net.Socket socket = new java.net.Socket()) {
-            socket.connect(new java.net.InetSocketAddress("localhost", port), 1000);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     public static String getPortfolioSummaryJson(int shareholderId) {
-        Map<Integer, PortfolioEntry> userPortfolio = portfolioMap.get(shareholderId);
-        if (userPortfolio == null)
-            return null;
+        Portfolio portfolio = PortfolioManager.get(shareholderId);
+        if (portfolio == null || portfolio.isEmpty()) {
+            // 空のポートフォリオを返す
+            Map<String, Object> emptyResult = new HashMap<>();
+            emptyResult.put("type", "portfolio_summary");
+            emptyResult.put("shareholderId", shareholderId);
+            emptyResult.put("totalAsset", 0.0);
+            emptyResult.put("totalProfit", 0.0);
+            emptyResult.put("profitRate", 0.0);
+            emptyResult.put("stocks", new ArrayList<>());
+            return gson.toJson(emptyResult);
+        }
 
-        double totalAsset = 0.0;
-        double totalCost = 0.0;
-        double totalProfit = 0.0;
+        int totalAsset = 0;
+        int totalCost = 0;
+        int totalProfit = 0;
 
         List<Map<String, Object>> stockList = new ArrayList<>();
-        for (PortfolioEntry entry : userPortfolio.values()) {
+        for (Portfolio.Entry entry : portfolio.getHoldings().values()) {
             int stockId = entry.getStockId();
             String stockName = entry.getStockName();
             int quantity = entry.getTotalQuantity();
-            double avgCost = entry.getAverageCost();
-            int currentPrice = stockPriceMap.get(stockId);
-            double asset = quantity * currentPrice;
-            double cost = quantity * avgCost;
-            double profit = asset - cost;
+            int avgCost = (int) Math.round(entry.getAverageCost());
+            
+            // 現在価格の安全な取得
+            Integer currentPriceInt = stockPriceMap.get(stockId);
+            Integer currentPrice = (currentPriceInt != null) ? currentPriceInt : 0;
+            
+            int asset = quantity * currentPrice;
+            int cost = quantity * avgCost;
+            int profit = asset - cost;
 
             // 保有株ごとの情報
             Map<String, Object> stockInfo = new HashMap<>();
@@ -583,7 +695,7 @@ public class StockProcessor {
             totalCost += cost;
             totalProfit += profit;
         }
-        double profitRate = totalCost > 0 ? totalProfit / totalCost : 0.0;
+        double profitRate = totalCost > 0 ? (double) totalProfit / totalCost : 0.0;
 
         Map<String, Object> result = new HashMap<>();
         result.put("type", "portfolio_summary");
@@ -593,6 +705,6 @@ public class StockProcessor {
         result.put("profitRate", profitRate);
         result.put("stocks", stockList);
 
-        return new com.google.gson.Gson().toJson(result);
+        return gson.toJson(result);
     }
 }

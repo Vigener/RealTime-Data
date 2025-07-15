@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.concurrent.ConcurrentHashMap;
 
+import io.github.vgnri.config.Config;
 import io.github.vgnri.model.ShareholderInfo;
 import io.github.vgnri.model.StockInfo;
 
@@ -22,23 +23,25 @@ public class MetadataLoader {
         
         ConcurrentHashMap<Integer, StockInfo> stockMetadata = new ConcurrentHashMap<>();
         
+        int maxLines = Config.DEFAULT_STOCK_COUNT + 1;
         try (BufferedReader reader = new BufferedReader(new FileReader(csvFilePath))) {
             String line;
             int lineNumber = 0;
-            
-            while ((line = reader.readLine()) != null) {
-                lineNumber++;
-                
-                // ヘッダ行をスキップ
-                if (lineNumber == 1) {
-                    System.out.println("ヘッダ: " + line);
-                    continue;
-                }
-                
-                // 空行をスキップ
-                if (line.trim().isEmpty()) {
-                    continue;
-                }
+
+            while ((line = reader.readLine()) != null && lineNumber < maxLines) {
+            // while ((line = reader.readLine()) != null) { // 本番用
+            lineNumber++;
+
+            // ヘッダ行をスキップ
+            if (lineNumber == 1) {
+                System.out.println("ヘッダ: " + line);
+                continue;
+            }
+
+            // 空行をスキップ
+            if (line.trim().isEmpty()) {
+                continue;
+            }
                 
                 try {
                     StockInfo stockInfo = StockInfo.fromCsvLine(line);
@@ -74,7 +77,7 @@ public class MetadataLoader {
             String line;
             int lineNumber = 0;
             
-            int maxLines = 6;
+            int maxLines = Config.DEFAULT_SHAREHOLDER_COUNT + 1;
             while ((line = reader.readLine()) != null && lineNumber < maxLines) {
             // while ((line = reader.readLine()) != null) { // 本番用
                 lineNumber++;
