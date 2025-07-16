@@ -133,6 +133,10 @@ public class StockPrice implements Serializable {
                         
                         double min = Double.parseDouble(parts[2].trim());
                         double max = Double.parseDouble(parts[3].trim());
+
+                         // 価格を3桁以下に制限
+                        min = Math.max(50.0, Math.min(min, 800.0));  // 最小50円、最大800円
+                        max = Math.max(min + 50.0, Math.min(max, 999.0));  // 最大999円、最小幅50円確保
                         
                         // 論理的な値をチェック
                         if (min >= max) {
@@ -187,9 +191,12 @@ public class StockPrice implements Serializable {
         stockIdList.clear();
         
         for (int i = 1; i <= stockCount; i++) {
-            // デフォルトの価格範囲
-            double min = 50.0 + (i % 100);
-            double max = min + 100.0 + (i % 50);
+            // デフォルトの価格範囲を3桁以下に制限
+            double min = 100.0 + (i % 300);  // 100円～399円
+            double max = min + 200.0 + (i % 300);  // 最大699円程度
+            
+            // 最大値を999円以下に制限
+            max = Math.min(max, 999.0);
             
             stockRanges.put(i, new StockRange(min, max));
             stockIdList.add(i);
@@ -252,7 +259,16 @@ public class StockPrice implements Serializable {
             StockRange range = stockRanges.get(stockId);
             
             if (range != null) {
-                int newPrice = (int) (range.min + (range.max - range.min) * random.nextDouble());
+                // 価格変動をより自然にするため、前回価格から小幅変動
+                StockPrice currentPrice = currentPrices.get(stockId);
+                int basePrice = (currentPrice != null) ? currentPrice.getPrice() : (int)range.min;
+                
+                // ±10%の範囲で変動、ただし範囲内に収める
+                double variation = 0.1 * (random.nextDouble() - 0.5) * 2; // -0.1 to 0.1
+                int newPrice = (int) Math.max(range.min, Math.min(range.max, basePrice * (1 + variation)));
+                
+                // 確実に999円以下にする
+                newPrice = Math.min(newPrice, 999);
                 
                 StockPrice updatedPrice = new StockPrice(stockId, newPrice, currentTime);
                 currentPrices.put(stockId, updatedPrice);

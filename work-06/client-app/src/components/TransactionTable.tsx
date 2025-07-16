@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Table, ToggleButton } from "react-bootstrap";
+import { Table } from "react-bootstrap";
 import type { TransactionProps } from "../DataType";
 
 function TransactionTable({ TransactionData }: TransactionProps) {
@@ -11,7 +11,7 @@ function TransactionTable({ TransactionData }: TransactionProps) {
 
   return (
     <div>
-      {TransactionData.length >= 21 && (
+      {/* {TransactionData.length >= 21 && (
         <div style={{ margin: "8px" }}>
           <ToggleButton
             id="toggle-show-all"
@@ -24,20 +24,16 @@ function TransactionTable({ TransactionData }: TransactionProps) {
             {showAll ? "高さ制限する" : "全体を表示"}
           </ToggleButton>
         </div>
-      )}
+      )} */}
       <div id="size-of-stock-table">
         <strong>データ数: </strong>
         {TransactionData.length} 
       </div>
       <div
-        style={
-          showAll
-            ? {}
-            : {
-                maxHeight: `${maxHeight}px`,
-                overflowY: "auto",
-              }
-        }
+        style={{
+          maxHeight: `${maxHeight}px`,
+          overflowY: "auto",
+        }}
       >
         <Table
           id="stock-table"
