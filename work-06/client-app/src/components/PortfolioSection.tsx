@@ -1,6 +1,15 @@
+import {
+  ArcElement,
+  Chart as ChartJS,
+  Legend,
+  Tooltip,
+} from 'chart.js';
 import React, { useEffect, useState } from "react";
 import { Dropdown, DropdownButton, Table } from "react-bootstrap";
+import { Pie } from 'react-chartjs-2';
 import type { PortfolioSummary, ShareholderIdNameMap } from "../DataType";
+
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface Props {
   shareholderIdNameMap: ShareholderIdNameMap;
@@ -69,6 +78,92 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
                              selectedId !== 0 && 
                              lastReceivedShareholderId === selectedId;
 
+  // 地域名の変換
+  const getRegionDisplayName = (region: string) => {
+    switch (region) {
+      case 'Japan':
+        return '日本株';
+      case 'US':
+        return '米国株';
+      case 'Europe':
+        return '欧州株';
+      default:
+        return 'その他';
+    }
+  };
+
+  // 円グラフ用データの作成
+  const createChartData = () => {
+    if (!portfolioSummary?.regionSummary) {
+      return null;
+    }
+
+    // 資産価値が0より大きい地域のみ表示
+    const filteredRegions = Object.entries(portfolioSummary.regionSummary)
+      .filter(([_, regionData]) => regionData.asset > 0);
+
+    if (filteredRegions.length === 0) {
+      return null;
+    }
+
+    const data = filteredRegions.map(([_, regionData]) => regionData.asset);
+    const labels = filteredRegions.map(([region, regionData]) => {
+      const regionName = getRegionDisplayName(region);
+      const ratio = (regionData.assetRatio * 100).toFixed(1);
+      return `${regionName} (${ratio}%)`;
+    });
+
+    // 色の配列
+    const colors = [
+      '#FF6384', // 赤系 - 日本株
+      '#36A2EB', // 青系 - 米国株
+      '#FFCE56', // 黄系 - 欧州株
+      '#4BC0C0', // 緑系 - その他
+    ];
+
+    return {
+      labels,
+      datasets: [
+        {
+          data,
+          backgroundColor: colors.slice(0, filteredRegions.length),
+          borderColor: colors.slice(0, filteredRegions.length),
+          borderWidth: 1,
+        },
+      ],
+    };
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+        labels: {
+          padding: 15,
+          usePointStyle: true,
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context: any) {
+            const regionKey = Object.keys(portfolioSummary?.regionSummary || {})[context.dataIndex];
+            const regionData = portfolioSummary?.regionSummary[regionKey];
+            if (regionData) {
+              return [
+                `評価額: ${regionData.asset.toLocaleString()}円`,
+                `損益: ${regionData.profit > 0 ? '+' : ''}${regionData.profit.toLocaleString()}円`,
+                `損益率: ${regionData.profitRate > 0 ? '+' : ''}${(regionData.profitRate * 100).toFixed(2)}%`
+              ];
+            }
+            return context.label;
+          }
+        }
+      }
+    },
+  };
+
   return (
     <div
       style={{
@@ -115,9 +210,10 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
               {(portfolioSummary.profitRate * 100).toFixed(2)}%
             </span>
           </h3>
+
           <div
             style={{
-              maxHeight: `900px`,
+              maxHeight: `600px`,
               overflowY: "auto",
             }}
           >
@@ -135,6 +231,7 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
                 <tr>
                   <th>株式ID</th>
                   <th>株式名</th>
+                  <th>地域</th>
                   <th>保有株数</th>
                   <th>平均取得単価</th>
                   <th>現在の株価</th>
@@ -146,6 +243,7 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
                   <tr key={stock.stockId}>
                     <td>{stock.stockId}</td>
                     <td>{stock.stockName}</td>
+                    <td>{getRegionDisplayName(stock.region)}</td>
                     <td>{stock.quantity.toLocaleString()}</td>
                     <td>{stock.averageCost.toLocaleString()}円</td>
                     <td>{stock.currentPrice.toLocaleString()}円</td>
@@ -160,6 +258,50 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
               </tbody>
             </Table>
           </div>
+          
+          {/* 地域別資産配分円グラフ */}
+          {createChartData() && (
+            <div style={{ marginTop: "20px", marginBottom: "20px" }}>
+              <h4>地域別資産配分</h4>
+              <div style={{ width: "350px", height: "300px", margin: "0 auto" }}>
+                <Pie data={createChartData()!} options={chartOptions} />
+              </div>
+              
+              {/* 地域別詳細情報のテーブル */}
+              <div style={{ marginTop: "15px" }}>
+                <Table size="sm" striped>
+                  <thead>
+                    <tr>
+                      <th>地域</th>
+                      <th>評価額</th>
+                      <th>損益</th>
+                      <th>損益率</th>
+                      <th>比率</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(portfolioSummary.regionSummary)
+                      .filter(([_, regionData]) => regionData.asset > 0)
+                      .map(([region, regionData]) => (
+                      <tr key={region}>
+                        <td>{getRegionDisplayName(region)}</td>
+                        <td>{regionData.asset.toLocaleString()}円</td>
+                        <td style={{ color: regionData.profit > 0 ? "green" : regionData.profit < 0 ? "red" : "inherit" }}>
+                          {regionData.profit > 0 ? "+" : ""}{regionData.profit.toLocaleString()}円
+                        </td>
+                        <td style={{ color: regionData.profitRate > 0 ? "green" : regionData.profitRate < 0 ? "red" : "inherit" }}>
+                          {regionData.profitRate > 0 ? "+" : ""}{(regionData.profitRate * 100).toFixed(2)}%
+                        </td>
+                        <td>{(regionData.assetRatio * 100).toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          
         </div>
       )}
     </div>

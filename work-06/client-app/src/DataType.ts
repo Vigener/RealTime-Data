@@ -70,12 +70,12 @@ export type ShareholderIdNameMapData = {
 }
 
 // {
-    // "ShareholderIdNameMap": {
-    //     "1": "五十嵐",
-    //     "2": "山田",
-    //     "3": "溝上",
-    //     "4": "北川"
-    // }
+//     "ShareholderIdNameMap": {
+//         "1": "五十嵐",
+//         "2": "山田",
+//         "3": "溝上",
+//         "4": "北川"
+//     }
 // }
 
 // {
@@ -103,15 +103,28 @@ export type PortfolioSummary = {
   totalAsset: number;
   totalProfit: number;
   profitRate: number;
-  stocks: {
-    stockId: number;
-    stockName: string;
-    quantity: number;
-    averageCost: number;
-    currentPrice: number;
-    profit: number;
-  }[];
+  stocks: PortfolioStock[];
+  regionSummary: RegionSummary;
 };
+
+export interface PortfolioStock {
+  stockId: number;
+  stockName: string;
+  quantity: number;
+  averageCost: number;
+  currentPrice: number;
+  profit: number;
+  region: string; // 追加
+}
+
+export interface RegionSummary {
+  [region: string]: {
+    asset: number;
+    profit: number;
+    profitRate: number;
+    assetRatio: number;
+  };
+}
 
 export type TransactionHistory = {
   type: "transaction_history";

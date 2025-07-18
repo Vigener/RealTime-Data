@@ -428,6 +428,8 @@ public class StockProcessor {
         String shareholderName = "";
         String stockName = "";
         int currentPrice = 0;
+        int acquisitionPrice = 0; // 取得単価
+
         ShareholderInfo shInfo = ShareholderMetadata.get(transaction.getShareholderId());
         if (shInfo != null)
             shareholderName = shInfo.getShareholderName();
@@ -436,11 +438,13 @@ public class StockProcessor {
             stockName = stInfo.getStockName();
         Integer price = stockPriceMap.get(transaction.getStockId());
         // System.out.println("current_price"+price);
-        if (price != null)
+        if (price != null) {
             currentPrice = price;
+            acquisitionPrice = price;
+        }
 
         // ポートフォリオ更新
-        updatePortfolio(transaction.getShareholderId(), transaction.getStockId(), stockName, transaction.getQuantity(), currentPrice);
+        updatePortfolio(transaction.getShareholderId(), transaction.getStockId(), stockName, transaction.getQuantity(), acquisitionPrice);
 
         // Mapにまとめてバッファに追加
         Map<String, Object> tx = new HashMap<>();
@@ -451,6 +455,8 @@ public class StockProcessor {
         tx.put("quantity", transaction.getQuantity());
         tx.put("timestamp", transaction.getTimestamp().toString());
         tx.put("currentPrice", currentPrice);
+        tx.put("acquisitionPrice", acquisitionPrice); // 取得単価
+
         synchronized (bufferLock) {
             transactionBuffer.add(tx);
         }
@@ -507,9 +513,26 @@ public class StockProcessor {
 
     // ポートフォリオ更新メソッドを修正
     private static void updatePortfolio(int shareholderId, int stockId, String stockName, 
-                                       int quantity, double price) {
-        PortfolioManager.computeIfAbsent(shareholderId, k -> new Portfolio(shareholderId))
-                       .addTransaction(stockId, stockName, quantity, price);
+                                       int quantity, int acquisitionPrice) {
+        // PortfolioManager.computeIfAbsent(shareholderId, k -> new Portfolio(shareholderId))
+        //                .addTransaction(stockId, stockName, quantity, price);
+        Portfolio portfolio = PortfolioManager.computeIfAbsent(shareholderId, k -> new Portfolio(shareholderId));
+
+        // デバック用: 更新前の株数を記録
+        Portfolio.Entry existingEntry = portfolio.getHoldings().get(stockId);
+        int beforeQuantity = (existingEntry != null) ? existingEntry.getTotalQuantity() : 0;
+
+        // ポートフォリオ更新
+        portfolio.addTransaction(stockId, stockName, quantity, acquisitionPrice);
+
+        // デバッグ: 更新後の株数を表示
+        Portfolio.Entry updatedEntry = portfolio.getHoldings().get(stockId);
+        int afterQuantity = (updatedEntry != null) ? updatedEntry.getTotalQuantity() : 0;
+        // System.out.println("ポートフォリオ更新: 株主ID=" + shareholderId + 
+        //                    " 銘柄ID=" + stockId +
+        //                    " 取引数量=" + quantity + 
+        //                    " 更新前株数=" + beforeQuantity + 
+        //                    " 更新後株数=" + afterQuantity);
     }
 
     // 集計・送信・クリーンアップを一括処理するメソッド
@@ -647,6 +670,24 @@ public class StockProcessor {
         }
     }
 
+    // 地域情報を取得するメソッドを追加
+    private static String getStockRegion(int stockId) {
+        StockInfo stockInfo = StockMetadata.get(stockId);
+        if (stockInfo != null && stockInfo.getMarketType() != null) {
+            switch (stockInfo.getMarketType()) {
+                case JAPAN:
+                    return "Japan";
+                case USA:
+                    return "US";
+                case EUROPE:
+                    return "Europe";
+                default:
+                    return "Other";
+            }
+        }
+        return "Unknown";
+    }
+
     public static String getPortfolioSummaryJson(int shareholderId) {
         Portfolio portfolio = PortfolioManager.get(shareholderId);
         if (portfolio == null || portfolio.isEmpty()) {
@@ -654,16 +695,20 @@ public class StockProcessor {
             Map<String, Object> emptyResult = new HashMap<>();
             emptyResult.put("type", "portfolio_summary");
             emptyResult.put("shareholderId", shareholderId);
-            emptyResult.put("totalAsset", 0.0);
-            emptyResult.put("totalProfit", 0.0);
+            emptyResult.put("totalAsset", 0);
+            emptyResult.put("totalProfit", 0);
             emptyResult.put("profitRate", 0.0);
             emptyResult.put("stocks", new ArrayList<>());
+            emptyResult.put("regionSummary", createEmptyRegionSummary());
             return gson.toJson(emptyResult);
         }
 
         int totalAsset = 0;
         int totalCost = 0;
         int totalProfit = 0;
+        
+        // 地域別集計用
+        Map<String, RegionSummary> regionMap = new HashMap<>();
 
         List<Map<String, Object>> stockList = new ArrayList<>();
         for (Portfolio.Entry entry : portfolio.getHoldings().values()) {
@@ -679,6 +724,9 @@ public class StockProcessor {
             int asset = quantity * currentPrice;
             int cost = quantity * avgCost;
             int profit = asset - cost;
+            
+            // 地域判定（StockInfoのMarketTypeを使用）
+            String region = getStockRegion(stockId);
 
             // 保有株ごとの情報
             Map<String, Object> stockInfo = new HashMap<>();
@@ -688,13 +736,19 @@ public class StockProcessor {
             stockInfo.put("averageCost", avgCost);
             stockInfo.put("currentPrice", currentPrice);
             stockInfo.put("profit", profit);
+            stockInfo.put("region", region); // 地域情報を追加
             stockList.add(stockInfo);
 
             // 全体集計
             totalAsset += asset;
             totalCost += cost;
             totalProfit += profit;
+            
+            // 地域別集計
+            RegionSummary regionSummary = regionMap.computeIfAbsent(region, k -> new RegionSummary());
+            regionSummary.addStock(asset, cost, profit);
         }
+        
         double profitRate = totalCost > 0 ? (double) totalProfit / totalCost : 0.0;
 
         Map<String, Object> result = new HashMap<>();
@@ -704,7 +758,58 @@ public class StockProcessor {
         result.put("totalProfit", totalProfit);
         result.put("profitRate", profitRate);
         result.put("stocks", stockList);
+        result.put("regionSummary", createRegionSummaryMap(regionMap, totalAsset));
 
         return gson.toJson(result);
+    }
+
+    // 地域別サマリー作成
+    private static Map<String, Object> createRegionSummaryMap(Map<String, RegionSummary> regionMap, int totalAsset) {
+        Map<String, Object> regionSummary = new HashMap<>();
+        
+        for (Map.Entry<String, RegionSummary> entry : regionMap.entrySet()) {
+            String region = entry.getKey();
+            RegionSummary summary = entry.getValue();
+            
+            Map<String, Object> regionData = new HashMap<>();
+            regionData.put("asset", summary.totalAsset);
+            regionData.put("profit", summary.totalProfit);
+            regionData.put("profitRate", summary.totalCost > 0 ? (double) summary.totalProfit / summary.totalCost : 0.0);
+            regionData.put("assetRatio", totalAsset > 0 ? (double) summary.totalAsset / totalAsset : 0.0);
+            
+            regionSummary.put(region, regionData);
+        }
+        
+        return regionSummary;
+    }
+
+    private static Map<String, Object> createEmptyRegionSummary() {
+        Map<String, Object> regionSummary = new HashMap<>();
+        regionSummary.put("Japan", createEmptyRegionData());
+        regionSummary.put("US", createEmptyRegionData());
+        regionSummary.put("Europe", createEmptyRegionData());
+        return regionSummary;
+    }
+
+    private static Map<String, Object> createEmptyRegionData() {
+        Map<String, Object> regionData = new HashMap<>();
+        regionData.put("asset", 0);
+        regionData.put("profit", 0);
+        regionData.put("profitRate", 0.0);
+        regionData.put("assetRatio", 0.0);
+        return regionData;
+    }
+
+    // 地域別集計クラス
+    private static class RegionSummary {
+        int totalAsset = 0;
+        int totalCost = 0;
+        int totalProfit = 0;
+        
+        void addStock(int asset, int cost, int profit) {
+            this.totalAsset += asset;
+            this.totalCost += cost;
+            this.totalProfit += profit;
+        }
     }
 }
