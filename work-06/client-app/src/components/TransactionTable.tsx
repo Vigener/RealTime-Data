@@ -25,10 +25,6 @@ function TransactionTable({ TransactionData }: TransactionProps) {
           </ToggleButton>
         </div>
       )} */}
-      <div id="size-of-stock-table">
-        <strong>データ数: </strong>
-        {TransactionData.length} 
-      </div>
       <div
         style={{
           maxHeight: `${maxHeight}px`,

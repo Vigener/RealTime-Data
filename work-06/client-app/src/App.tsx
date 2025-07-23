@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import ToggleButton from "react-bootstrap/esm/ToggleButton";
 import "./App.css";
+import GenderStatsSection from "./components/GenderStatsSection";
+import GenerationStatsSection from "./components/GenerationStatsSection";
 import PortfolioSection from "./components/PortfolioSection";
+import RegionStatsSection from "./components/RegionStatsSection";
 import TransactionHistorySection from "./components/TransactionHistorySection";
 import {
+  type GenderStats,
+  type GenerationStats,
   type PortfolioSummary,
   type ServerMessage,
   type ShareholderIdNameMap,
@@ -33,6 +38,12 @@ function App() {
 
   // ポートフォリオ用
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
+
+  // 性別統計用
+  const [genderStats, setGenderStats] = useState<GenderStats | null>(null);
+
+  // 年代別統計用
+  const [generationStats, setGenerationStats] = useState<GenerationStats | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -64,6 +75,12 @@ function App() {
             break;
           case "ShareholderIdNameMap":
             setShareholderIdNameMap(msg.ShareholderIdNameMap);
+            break;
+          case "gender_stats":
+            setGenderStats(msg);
+            break;
+          case "generation_stats":
+            setGenerationStats(msg);
             break;
           default:
             break;
@@ -114,16 +131,41 @@ function App() {
         </ToggleButton>
       </div>
       <div style={{ display: "flex" }}>
-        <PortfolioSection
-          shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
-          ws={wsRef.current}
-          portfolioSummary={portfolioSummary}
-        />
-        <TransactionHistorySection
-          transactionHistory={transactionHistory}
-          isTryingConnect={is_trying_connect}
-          setIsTryingConnect={setIsTryingConnect}
-        />
+        <div
+          id="right-side"
+          style={{
+                flex: 5,
+                borderRight: "1px solid #ccc",
+                paddingRight: "16px",
+              }}>
+          <PortfolioSection
+            shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
+            ws={wsRef.current}
+            portfolioSummary={portfolioSummary}
+          />
+          <hr />
+          {/* 性別ごとの円グラフのセクション*/}
+          <GenderStatsSection
+            genderStats={genderStats}
+          />
+          <hr />
+          <GenerationStatsSection
+            generationStats={generationStats}
+          />
+        </div>
+        <div
+          id="left-side"
+          style={{ flex: 5, paddingLeft: "16px" }}
+        >
+          <TransactionHistorySection
+            transactionHistory={transactionHistory}
+            isTryingConnect={is_trying_connect}
+            setIsTryingConnect={setIsTryingConnect}
+          />
+          <hr />
+          {/* 地域セクション */}
+          <RegionStatsSection />
+        </div>
       </div>
       <div id="raw-data">
         <h3>Raw Data</h3>

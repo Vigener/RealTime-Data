@@ -617,6 +617,231 @@ public class StockProcessor {
                 sendToWebClients(portfolioJson);
             }
         }
+
+        // 性別統計の送信
+        calculateAndSendGenderStats();
+
+        // 年代別統計の送信
+        calculateAndSendGenerationStats();
+    }
+
+    // 性別統計計算メソッド
+    private static void calculateAndSendGenderStats() {
+        Map<String, Object> maleStats = new HashMap<>();
+        Map<String, Object> femaleStats = new HashMap<>();
+        
+        // 初期化
+        maleStats.put("investorCount", 0);
+        maleStats.put("totalTransactions", 0);
+        maleStats.put("totalProfit", 0);
+        maleStats.put("averageProfit", 0);
+        maleStats.put("profitRate", 0.0);
+        
+        femaleStats.put("investorCount", 0);
+        femaleStats.put("totalTransactions", 0);
+        femaleStats.put("totalProfit", 0);
+        femaleStats.put("averageProfit", 0);
+        femaleStats.put("profitRate", 0.0);
+        
+        int maleInvestorCount = 0;
+        int femaleInvestorCount = 0;
+        int maleTotalTransactions = 0;
+        int femaleTotalTransactions = 0;
+        int maleTotalProfit = 0;
+        int femaleTotalProfit = 0;
+        int maleTotalCost = 0;
+        int femaleTotalCost = 0;
+        
+        // ポートフォリオから統計計算
+        for (Map.Entry<Integer, Portfolio> entry : PortfolioManager.entrySet()) {
+            int shareholderId = entry.getKey();
+            Portfolio portfolio = entry.getValue();
+            
+            if (portfolio.isEmpty()) continue;
+            
+            ShareholderInfo shareholder = ShareholderMetadata.get(shareholderId);
+            if (shareholder == null) continue;
+            
+            boolean isMale = (shareholder.getGender() == ShareholderInfo.Gender.MALE);
+            
+            int portfolioProfit = 0;
+            int portfolioCost = 0;
+            int transactionCount = 0;
+            
+            // ポートフォリオの評価損益計算
+            for (Portfolio.Entry stockEntry : portfolio.getHoldings().values()) {
+                int stockId = stockEntry.getStockId();
+                int quantity = stockEntry.getTotalQuantity();
+                int avgCost = (int) Math.round(stockEntry.getAverageCost());
+                
+                Integer currentPriceInt = stockPriceMap.get(stockId);
+                int currentPrice = (currentPriceInt != null) ? currentPriceInt : 0;
+                
+                int asset = quantity * currentPrice;
+                int cost = quantity * avgCost;
+                int profit = asset - cost;
+                
+                portfolioProfit += profit;
+                portfolioCost += cost;
+                transactionCount += stockEntry.getAcquisitions().size();
+            }
+            
+            // 性別ごとに集計
+            if (isMale) {
+                maleInvestorCount++;
+                maleTotalTransactions += transactionCount;
+                maleTotalProfit += portfolioProfit;
+                maleTotalCost += portfolioCost;
+            } else {
+                femaleInvestorCount++;
+                femaleTotalTransactions += transactionCount;
+                femaleTotalProfit += portfolioProfit;
+                femaleTotalCost += portfolioCost;
+            }
+        }
+        
+        // 平均値計算
+        int maleAverageProfit = maleInvestorCount > 0 ? maleTotalProfit / maleInvestorCount : 0;
+        int femaleAverageProfit = femaleInvestorCount > 0 ? femaleTotalProfit / femaleInvestorCount : 0;
+        double maleProfitRate = maleTotalCost > 0 ? (double) maleTotalProfit / maleTotalCost : 0.0;
+        double femaleProfitRate = femaleTotalCost > 0 ? (double) femaleTotalProfit / femaleTotalCost : 0.0;
+        
+        // 結果セット
+        maleStats.put("investorCount", maleInvestorCount);
+        maleStats.put("totalTransactions", maleTotalTransactions);
+        maleStats.put("totalProfit", maleTotalProfit);
+        maleStats.put("totalCost", maleTotalCost);
+        maleStats.put("averageProfit", maleAverageProfit);
+        maleStats.put("profitRate", maleProfitRate);
+        
+        femaleStats.put("investorCount", femaleInvestorCount);
+        femaleStats.put("totalTransactions", femaleTotalTransactions);
+        femaleStats.put("totalProfit", femaleTotalProfit);
+        femaleStats.put("totalCost", femaleTotalCost);
+        femaleStats.put("averageProfit", femaleAverageProfit);
+        femaleStats.put("profitRate", femaleProfitRate);
+        
+        // JSON作成・送信
+        Map<String, Object> result = new HashMap<>();
+        result.put("type", "gender_stats");
+        result.put("male", maleStats);
+        result.put("female", femaleStats);
+        
+        sendToWebClients(gson.toJson(result));
+    }
+
+    // 年代別統計計算メソッド
+    private static void calculateAndSendGenerationStats() {
+        // 年代別統計用のマップ（20代、30代、40代、50代、60代、70代以上）
+        Map<String, Map<String, Object>> generationStatsMap = new HashMap<>();
+        
+        // 年代別カウンター
+        Map<String, Integer> generationInvestorCount = new HashMap<>();
+        Map<String, Integer> generationTotalTransactions = new HashMap<>();
+        Map<String, Integer> generationTotalProfit = new HashMap<>();
+        Map<String, Integer> generationTotalCost = new HashMap<>();
+        
+        // 年代の初期化
+        String[] generations = {"20s", "30s", "40s", "50s", "60s", "70s+"};
+        for (String gen : generations) {
+            generationInvestorCount.put(gen, 0);
+            generationTotalTransactions.put(gen, 0);
+            generationTotalProfit.put(gen, 0);
+            generationTotalCost.put(gen, 0);
+        }
+        
+        // ポートフォリオから統計計算
+        for (Map.Entry<Integer, Portfolio> entry : PortfolioManager.entrySet()) {
+            int shareholderId = entry.getKey();
+            Portfolio portfolio = entry.getValue();
+            
+            if (portfolio.isEmpty()) continue;
+            
+            ShareholderInfo shareholder = ShareholderMetadata.get(shareholderId);
+            if (shareholder == null) continue;
+            
+            // 年齢から年代を決定
+            int age = shareholder.getAge();
+            String generation = getGenerationFromAge(age);
+            
+            int portfolioProfit = 0;
+            int portfolioCost = 0;
+            int transactionCount = 0;
+            
+            // ポートフォリオの評価損益計算
+            for (Portfolio.Entry stockEntry : portfolio.getHoldings().values()) {
+                int stockId = stockEntry.getStockId();
+                int quantity = stockEntry.getTotalQuantity();
+                int avgCost = (int) Math.round(stockEntry.getAverageCost());
+                
+                Integer currentPriceInt = stockPriceMap.get(stockId);
+                int currentPrice = (currentPriceInt != null) ? currentPriceInt : 0;
+                
+                int asset = quantity * currentPrice;
+                int cost = quantity * avgCost;
+                int profit = asset - cost;
+                
+                portfolioProfit += profit;
+                portfolioCost += cost;
+                transactionCount += stockEntry.getAcquisitions().size();
+            }
+            
+            // 年代別に集計
+            generationInvestorCount.put(generation, generationInvestorCount.get(generation) + 1);
+            generationTotalTransactions.put(generation, generationTotalTransactions.get(generation) + transactionCount);
+            generationTotalProfit.put(generation, generationTotalProfit.get(generation) + portfolioProfit);
+            generationTotalCost.put(generation, generationTotalCost.get(generation) + portfolioCost);
+        }
+        
+        // 年代別統計データの作成
+        for (String generation : generations) {
+            Map<String, Object> genStats = new HashMap<>();
+            
+            int investorCount = generationInvestorCount.get(generation);
+            int totalTransactions = generationTotalTransactions.get(generation);
+            int totalProfit = generationTotalProfit.get(generation);
+            int totalCost = generationTotalCost.get(generation);
+            
+            // 平均値計算
+            int averageProfit = investorCount > 0 ? totalProfit / investorCount : 0;
+            double profitRate = totalCost > 0 ? (double) totalProfit / totalCost : 0.0;
+            
+            genStats.put("investorCount", investorCount);
+            genStats.put("totalTransactions", totalTransactions);
+            genStats.put("totalProfit", totalProfit);
+            genStats.put("totalCost", totalCost);
+            genStats.put("averageProfit", averageProfit);
+            genStats.put("profitRate", profitRate);
+            
+            generationStatsMap.put(generation, genStats);
+        }
+        
+        // JSON作成・送信
+        Map<String, Object> result = new HashMap<>();
+        result.put("type", "generation_stats");
+        result.put("generations", generationStatsMap);
+        
+        sendToWebClients(gson.toJson(result));
+    }
+
+    // 年齢から年代を判定するヘルパーメソッド
+    private static String getGenerationFromAge(int age) {
+        if (age >= 20 && age < 30) {
+            return "20s";
+        } else if (age >= 30 && age < 40) {
+            return "30s";
+        } else if (age >= 40 && age < 50) {
+            return "40s";
+        } else if (age >= 50 && age < 60) {
+            return "50s";
+        } else if (age >= 60 && age < 70) {
+            return "60s";
+        } else if (age >= 70) {
+            return "70s+";
+        } else {
+            // 20歳未満の場合は20代に含める
+            return "20s";
+        }
     }
 
 

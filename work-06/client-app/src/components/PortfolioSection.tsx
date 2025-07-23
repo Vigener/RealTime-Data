@@ -165,13 +165,7 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
   };
 
   return (
-    <div
-      style={{
-        flex: 5,
-        borderRight: "1px solid #ccc",
-        paddingRight: "16px",
-      }}
-    >
+    <div>
       <h2>ポートフォリオ</h2>
       <DropdownButton
         title={title}

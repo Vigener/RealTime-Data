@@ -138,4 +138,49 @@ export type ShareholderIdNameMapMsg = {
   ShareholderIdNameMap: ShareholderIdNameMap;
 };
 
-export type ServerMessage = PortfolioSummary | TransactionHistory | ShareholderIdNameMapMsg;
+export interface GenderStats {
+  male: {
+    investorCount: number;
+    totalTransactions: number;
+    totalProfit: number;
+    totalCost: number;
+    averageProfit: number;
+    profitRate: number;
+  };
+  female: {
+    investorCount: number;
+    totalTransactions: number;
+    totalProfit: number;
+    totalCost: number;
+    averageProfit: number;
+    profitRate: number;
+  };
+}
+
+export interface GenderStatsMessage extends GenderStats {
+  type: "gender_stats";
+}
+
+export interface GenerationStats {
+  generations: {
+    [generation: string]: {
+      investorCount: number;
+      totalTransactions: number;
+      totalProfit: number;
+      totalCost: number;
+      averageProfit: number;
+      profitRate: number;
+    };
+  };
+}
+
+export interface GenerationStatsMessage extends GenerationStats {
+  type: "generation_stats";
+}
+
+export type ServerMessage = 
+  | TransactionHistory
+  | PortfolioSummary
+  | ShareholderIdNameMapMsg
+  | GenderStatsMessage
+  | GenerationStatsMessage;

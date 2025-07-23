@@ -12,7 +12,7 @@ const TransactionHistorySection: React.FC<Props> = ({
   transactionHistory
 }) => {
   return (
-    <div style={{ flex: 5, paddingLeft: "16px" }}>
+    <div>
       <h2>取引履歴</h2>
       {/* <ToggleButton
         id="toggle-connection"
@@ -28,10 +28,10 @@ const TransactionHistorySection: React.FC<Props> = ({
       {transactionHistory && (transactionHistory.windowStart || transactionHistory.windowEnd) && (
         <div>
           <div>
-            <strong>Window Start: </strong> {transactionHistory.windowStart}
-          </div>
+            <strong>表示区間: </strong> {transactionHistory.windowStart} 〜 {transactionHistory.windowEnd}
+            </div>
           <div>
-            <strong>Window End: </strong> {transactionHistory.windowEnd}
+            <strong>取引数: </strong>{transactionHistory.transactions.length}
           </div>
         </div>
       )}
