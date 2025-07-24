@@ -20,7 +20,9 @@ export type TransactionWithInfo = {
   stockId: number;
   stockName: string;
   quantity: number;
-  currentPrice: number;
+  currentPrice: number;        // 現在価格（取引時点の保証価格）
+  previousPrice?: number;      // 以前の価格（価格変動の比較用）
+  acquisitionPrice?: number;   // 取得価格（ポートフォリオ計算用）
   timestamp: string;
 };
 

@@ -17,8 +17,10 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 import io.github.vgnri.config.Config;
+import io.github.vgnri.util.LocalTimeTypeAdapter;
 
 public class Transaction implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -43,6 +45,11 @@ public class Transaction implements Serializable {
     // スケジューラー制御用
     private static ScheduledFuture<?> updateTask;
     private static boolean isUpdateRunning = false;
+
+    // Gsonインスタンスの静的フィールド
+    private static final Gson gson = new GsonBuilder()
+        .registerTypeAdapter(LocalTime.class, new LocalTimeTypeAdapter())
+        .create();
 
     public Transaction(int shareholderId, int stockId, int quantity, LocalTime timestamp) {
         this.shareholderId = shareholderId;
@@ -107,21 +114,24 @@ public class Transaction implements Serializable {
 
     // 株取引を更新するメソッド
     private static void updateTransactions() {
-        LocalTime currentTime = LocalTime.now();
+        LocalTime baseTime = LocalTime.now();
         List<Transaction> transactions = new ArrayList<>();
 
-        // ランダムに株取引を生成
         for (int i = 0; i < Config.getCurrentTradesPerUpdate(); i++) {
-            int shareholderId = random.nextInt(Config.getCurrentShareholderCount()) + 1; // 1から現在の株主数の株主ID
-            int stockId = random.nextInt(Config.getCurrentStockCount()) + 1; // 1から現在の銘柄数の株ID
-            int quantity = random.nextInt(111) - 10; // -10から100の範囲の数量
-            LocalTime timestamp = currentTime;
+            int shareholderId = random.nextInt(Config.getCurrentShareholderCount()) + 1;
+            int stockId = random.nextInt(Config.getCurrentStockCount()) + 1;
+            int quantity = random.nextInt(111) - 10;
+            
+            long nanoOffset = random.nextInt(Config.PRICE_UPDATE_INTERVAL_MS * 1_000_000);
+            LocalTime timestamp = baseTime.plusNanos(nanoOffset);
 
             Transaction transaction = new Transaction(shareholderId, stockId, quantity, timestamp);
             transactions.add(transaction);
         }
 
-        // Socket経由でデータを送信
+        transactions.sort((t1, t2) -> t1.getTimestamp().compareTo(t2.getTimestamp()));
+
+        // **修正: PriceManagerを直接呼び出さず、Socket経由で送信**
         sendDataToClients(transactions);
 
         // リスナーに更新を通知
@@ -130,7 +140,7 @@ public class Transaction implements Serializable {
         }
     }
 
-    // クライアントにデータを送信
+    // クライアントにデータを送信（シンプル版）
     private static void sendDataToClients(List<Transaction> transactions) {
         if (clientWriters.isEmpty()) {
             return;
@@ -140,25 +150,25 @@ public class Transaction implements Serializable {
 
         for (PrintWriter writer : clientWriters) {
             try {
-                // JSON形式でデータを送信（Flinkと統一）
-                Gson gson = new Gson();
+                // 修正：LocalTimeを文字列に変換してから送信
                 for (Transaction transaction : transactions) {
-                    TransactionData data = new TransactionData(
-                            transaction.getShareholderId(),
-                            transaction.getStockId(),
-                            transaction.getQuantity(),
-                            transaction.getTimestamp().format(DISPLAY_FORMATTER));
-                    String json = gson.toJson(data);
+                    // LocalTimeを文字列に変換したオブジェクトを作成
+                    TransactionData transactionData = new TransactionData(
+                        transaction.getShareholderId(),
+                        transaction.getStockId(),
+                        transaction.getQuantity(),
+                        transaction.getFormattedTimestamp() // 既存の文字列メソッドを使用
+                    );
                     
-                    while (json.length() > 0 && json.charAt(0) != '{') {
-                        json = json.substring(1);
-                    }
+                    String json = gson.toJson(transactionData);
+                    
                     // 送信
                     writer.println(json);
                     writer.flush();
                 }
             } catch (Exception e) {
                 System.err.println("クライアントへの送信でエラーが発生しました: " + e.getMessage());
+                e.printStackTrace(); // デバッグ用に詳細を表示
                 writersToRemove.add(writer);
             }
         }
@@ -185,33 +195,57 @@ public class Transaction implements Serializable {
     // Socketサーバーを開始
     private static void startSocketServer() {
         Thread serverThread = new Thread(() -> {
-            try {
-                serverSocket = new ServerSocket(Config.TRANSACTION_PORT);
-                System.out.println("Transaction Socketサーバーが開始されました。ポート: " + Config.TRANSACTION_PORT);
-                System.out.println("クライアントの接続を待機中...");
-                
-                while (!serverSocket.isClosed()) {
-                    try {
-                        Socket clientSocket = serverSocket.accept();
-                        System.out.println("新しいクライアントが接続しました: " + clientSocket.getRemoteSocketAddress());
-                        
-                        // クライアント用のOutputStreamを作成
-                        PrintWriter writer = new PrintWriter(clientSocket.getOutputStream(), true);
-                        clientWriters.add(writer);
+            int maxRetries = 5;
+            int currentPort = Config.TRANSACTION_PORT;
+            
+            for (int retry = 0; retry < maxRetries; retry++) {
+                try {
+                    serverSocket = new ServerSocket(currentPort);
+                    System.out.println("Transaction Socketサーバーが開始されました。ポート: " + currentPort);
+                    System.out.println("クライアントの接続を待機中...");
+                    
+                    // 実際に使用するポートを記録（他のクラスで参照可能）
+                    if (currentPort != Config.TRANSACTION_PORT) {
+                        System.out.println("注意: デフォルトポート " + Config.TRANSACTION_PORT + 
+                                         " は使用中のため、ポート " + currentPort + " を使用します");
+                    }
+                    
+                    while (!serverSocket.isClosed()) {
+                        try {
+                            Socket clientSocket = serverSocket.accept();
+                            System.out.println("新しいクライアントが接続しました: " + clientSocket.getRemoteSocketAddress());
+                            
+                            // クライアント用のOutputStreamを作成
+                            PrintWriter writer = new PrintWriter(clientSocket.getOutputStream(), true);
+                            clientWriters.add(writer);
 
-                        System.out.println("現在の接続クライアント数: " + clientWriters.size());
+                            System.out.println("現在の接続クライアント数: " + clientWriters.size());
 
-                        // クライアント接続時に更新開始をチェック
-                        checkAndControlUpdates();
-                        
-                    } catch (IOException e) {
-                        if (!serverSocket.isClosed()) {
-                            System.err.println("クライアント接続でエラーが発生しました: " + e.getMessage());
+                            // クライアント接続時に更新開始をチェック
+                            checkAndControlUpdates();
+                            
+                        } catch (IOException e) {
+                            if (!serverSocket.isClosed()) {
+                                System.err.println("クライアント接続でエラーが発生しました: " + e.getMessage());
+                            }
                         }
                     }
+                    break; // 成功した場合はループを抜ける
+                    
+                } catch (IOException e) {
+                    if (e.getMessage().contains("Address already in use")) {
+                        System.err.println("ポート " + currentPort + " は使用中です。次のポートを試します...");
+                        currentPort++; // 次のポートを試す
+                        
+                        if (retry == maxRetries - 1) {
+                            System.err.println("利用可能なポートが見つかりませんでした。終了します。");
+                            return;
+                        }
+                    } else {
+                        System.err.println("Socketサーバーでエラーが発生しました: " + e.getMessage());
+                        return;
+                    }
                 }
-            } catch (IOException e) {
-                System.err.println("Socketサーバーでエラーが発生しうました: " + e.getMessage());
             }
         });
         
@@ -293,6 +327,9 @@ public class Transaction implements Serializable {
 
             // 設定を表示
             Config.printCurrentConfig();
+            
+            // 既存のプロセスをチェック・終了
+            checkAndTerminateExistingProcess();
 
             // Socketサーバーを開始
             startSocketServer();
@@ -329,6 +366,35 @@ public class Transaction implements Serializable {
         }
     }
     
+    /**
+     * 既存のプロセスをチェック・終了
+     */
+    private static void checkAndTerminateExistingProcess() {
+        try {
+            // ポート使用状況をチェック
+            ProcessBuilder pb = new ProcessBuilder("bash", "-c", 
+                "netstat -tlnp 2>/dev/null | grep :" + Config.TRANSACTION_PORT + " || echo 'PORT_FREE'");
+            Process process = pb.start();
+            
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()))) {
+                String line = reader.readLine();
+                
+                if (line != null && !line.contains("PORT_FREE")) {
+                    System.out.println("ポート " + Config.TRANSACTION_PORT + " は使用中です");
+                    System.out.println("使用状況: " + line);
+                    
+                    // 3秒待ってから再試行
+                    System.out.println("3秒後に再試行します...");
+                    Thread.sleep(3000);
+                }
+            }
+            
+        } catch (Exception e) {
+            System.err.println("ポートチェックエラー: " + e.getMessage());
+        }
+    }
+    
     private static class TransactionData {
         private int shareholderId;
         private int stockId;
@@ -342,20 +408,10 @@ public class Transaction implements Serializable {
             this.timestamp = timestamp;
         }
 
-        // Getters and toString() can be added if needed
-        public int getShareholderId() {
-            return shareholderId;
-        }
-
-        public int getStockId() {
-            return stockId;
-        }
-
-        public int getQuantity() {
-            return quantity;
-        }
-        public String getTimestamp() {
-            return timestamp;
-        }
+        // Getters
+        public int getShareholderId() { return shareholderId; }
+        public int getStockId() { return stockId; }
+        public int getQuantity() { return quantity; }
+        public String getTimestamp() { return timestamp; }
     }
 }

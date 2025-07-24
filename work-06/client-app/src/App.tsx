@@ -4,7 +4,6 @@ import "./App.css";
 import GenderStatsSection from "./components/GenderStatsSection";
 import GenerationStatsSection from "./components/GenerationStatsSection";
 import PortfolioSection from "./components/PortfolioSection";
-import RegionStatsSection from "./components/RegionStatsSection";
 import TransactionHistorySection from "./components/TransactionHistorySection";
 import {
   type GenderStats,
@@ -162,9 +161,9 @@ function App() {
             isTryingConnect={is_trying_connect}
             setIsTryingConnect={setIsTryingConnect}
           />
-          <hr />
+          {/* <hr /> */}
           {/* 地域セクション */}
-          <RegionStatsSection />
+          {/* <RegionStatsSection /> */}
         </div>
       </div>
       <div id="raw-data">

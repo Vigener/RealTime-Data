@@ -85,6 +85,7 @@ public class Config {
     public static final String TSUKUBA_CSV_PATH = getResourcePath("tsukuba_metadata.csv");
     
     public static final int WEBSOCKET_PORT = 3000; // WebSocketのポート番号
+    public static final int PRICE_MANAGER_PORT = 2003;
 
 
     

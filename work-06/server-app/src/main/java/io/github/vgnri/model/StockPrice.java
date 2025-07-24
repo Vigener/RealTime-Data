@@ -1,7 +1,7 @@
 package io.github.vgnri.model;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
+import static io.github.vgnri.loader.MetadataLoader.loadStockMetadata;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Serializable;
@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -34,7 +35,7 @@ public class StockPrice implements Serializable {
     private static final DateTimeFormatter DISPLAY_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss.SS");
     
     // 株価管理用の静的フィールド
-    private static Map<Integer, StockRange> stockRanges = new HashMap<>();
+    // private static Map<Integer, StockRange> stockRanges = new HashMap<>();
     private static Map<Integer, StockPrice> currentPrices = new HashMap<>();
     private static Random random = new Random();
     private static ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
@@ -53,6 +54,9 @@ public class StockPrice implements Serializable {
     
     // 株IDのリストを保持（順序管理用）
     private static List<Integer> stockIdList = new ArrayList<>();
+
+    // 初期化フラグを追加（既存のフィールドに追加）
+    private static boolean isInitialized = false;
 
     public StockPrice(int stockId, int price, LocalTime timestamp) {
         this.stockId = stockId;
@@ -73,14 +77,73 @@ public class StockPrice implements Serializable {
         return timestamp;
     }
     
-    // 株価範囲を保持するクラス
-    private static class StockRange {
-        double min;
-        double max;
+    /**
+     * 株価データを初期化するメソッド
+     * メタデータから株式情報を読み込み、初期株価を設定する
+     */
+    public static void initializeStockPrices() {
+        try {
+            // メタデータから株式情報を読み込む
+            Map<Integer, StockInfo> stockMetadata = loadStockMetadata(Config.STOCK_META_CSV_PATH);
+            // 株価範囲の初期化
+            // stockRanges.clear();
+            currentPrices.clear();
+            stockIdList.clear();
+            
+            for (Map.Entry<Integer, StockInfo> entry : stockMetadata.entrySet()) {
+                int stockId = entry.getKey();
+                StockInfo stockInfo = entry.getValue();
+                
+                // 株価範囲を設定（例：基準価格の±20%）
+                int basePrice = stockInfo.getBasePriceAsInt(); // StockInfoにgetBasePriceメソッドがあると仮定
+                int minPrice = (int) (basePrice * 0.8);
+                int maxPrice = (int) (basePrice * 1.2);
+                
+                StockRange range = new StockRange(minPrice, maxPrice);
+                // stockRanges.put(stockId, range);
+                
+                // 初期株価を基準価格に設定
+                StockPrice initialPrice = new StockPrice(stockId, basePrice, LocalTime.now());
+                currentPrices.put(stockId, initialPrice);
+                
+                // 株IDリストに追加
+                stockIdList.add(stockId);
+                
+                System.out.println("株式初期化: ID=" + stockId + 
+                                 ", 銘柄名=" + stockInfo.getStockName() + 
+                                 ", 初期価格=" + basePrice + "円");
+            }
+            
+            System.out.println("株価初期化完了: " + stockMetadata.size() + "銘柄");
+            
+        } catch (Exception e) {
+            System.err.println("株価初期化エラー: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * StockRangeクラス（内部クラスまたは別ファイルで定義）
+     */
+    public static class StockRange {
+        private final int minPrice;
+        private final int maxPrice;
         
-        StockRange(double min, double max) {
-            this.min = min;
-            this.max = max;
+        public StockRange(int minPrice, int maxPrice) {
+            this.minPrice = minPrice;
+            this.maxPrice = maxPrice;
+        }
+        
+        public int getMinPrice() {
+            return minPrice;
+        }
+        
+        public int getMaxPrice() {
+            return maxPrice;
+        }
+        
+        public int getRandomPrice() {
+            return random.nextInt(maxPrice - minPrice + 1) + minPrice;
         }
     }
     
@@ -89,124 +152,99 @@ public class StockPrice implements Serializable {
         void onPriceUpdate(List<StockPrice> updatedPrices);
     }
     
-    // CSVファイルから株価データを初期化
-    public static void initializeStockData(String csvFilePath) throws IOException {
-        initializeStockData(csvFilePath, Config.getCurrentStockCount());
-    }
+    // // CSVファイルから株価データを初期化
+    // public static void initializeStockData(String csvFilePath) throws IOException {
+    //     initializeStockData(csvFilePath, Config.getCurrentStockCount());
+    // }
     
     // CSVファイルから株価データを初期化（行数指定版）
-    public static void initializeStockData(String csvFilePath, int maxStockCount) throws IOException {
-        stockRanges.clear();
-        currentPrices.clear();
-        stockIdList.clear();
+    // public static void initializeStockData(String csvFilePath, int maxStockCount) throws IOException {
+    //     currentPrices.clear();
+    //     stockIdList.clear();
         
-        try (BufferedReader br = new BufferedReader(new FileReader(csvFilePath))) {
-            String line;
-            boolean isFirstLine = true;
-            int lineNumber = 0;
-            int readStockCount = 0;  // 読み込んだ銘柄数をカウント
+    //     try (BufferedReader br = new BufferedReader(new FileReader(csvFilePath))) {
+    //         String line;
+    //         boolean isFirstLine = true;
+    //         int lineNumber = 0;
+    //         int readStockCount = 0;  // 読み込んだ銘柄数をカウント
             
-            while ((line = br.readLine()) != null && readStockCount < maxStockCount) {
-                lineNumber++;
+    //         while ((line = br.readLine()) != null && readStockCount < maxStockCount) {
+    //             lineNumber++;
                 
-                if (isFirstLine) {
-                    isFirstLine = false;
-                    continue; // ヘッダー行をスキップ
-                }
+    //             if (isFirstLine) {
+    //                 isFirstLine = false;
+    //                 continue; // ヘッダー行をスキップ
+    //             }
                 
-                // 空行をスキップ
-                if (line.trim().isEmpty()) {
-                    continue;
-                }
+    //             // 空行をスキップ
+    //             if (line.trim().isEmpty()) {
+    //                 continue;
+    //             }
                 
-                String[] parts = line.split(",");
-                if (parts.length >= 4) {
-                    try {
-                        // 株IDを整数として解析
-                        int stockId = Integer.parseInt(parts[0].trim());
+    //             String[] parts = line.split(",");
+    //             if (parts.length >= 4) {
+    //                 try {
+    //                     // 株IDを整数として解析
+    //                     int stockId = Integer.parseInt(parts[0].trim());
                         
-                        // 空の値をチェック
-                        if (parts[1].trim().isEmpty() || parts[2].trim().isEmpty()) {
-                            System.out.println("行 " + lineNumber + " をスキップします: 空の値が含まれています");
-                            continue;
-                        }
+    //                     // 空の値をチェック
+    //                     if (parts[1].trim().isEmpty() || parts[2].trim().isEmpty()) {
+    //                         System.out.println("行 " + lineNumber + " をスキップします: 空の値が含まれています");
+    //                         continue;
+    //                     }
                         
-                        double min = Double.parseDouble(parts[2].trim());
-                        double max = Double.parseDouble(parts[3].trim());
+    //                     double min = Double.parseDouble(parts[2].trim());
+    //                     double max = Double.parseDouble(parts[3].trim());
 
-                         // 価格を3桁以下に制限
-                        min = Math.max(50.0, Math.min(min, 800.0));  // 最小50円、最大800円
-                        max = Math.max(min + 50.0, Math.min(max, 999.0));  // 最大999円、最小幅50円確保
+    //                      // 価格を3桁以下に制限
+    //                     min = Math.max(50.0, Math.min(min, 800.0));  // 最小50円、最大800円
+    //                     max = Math.max(min + 50.0, Math.min(max, 999.0));  // 最大999円、最小幅50円確保
                         
-                        // 論理的な値をチェック
-                        if (min >= max) {
-                            System.out.println("行 " + lineNumber + " をスキップします: 最小値が最大値以上です (min=" + min + ", max=" + max + ")");
-                            continue;
-                        }
+    //                     // 論理的な値をチェック
+    //                     if (min >= max) {
+    //                         System.out.println("行 " + lineNumber + " をスキップします: 最小値が最大値以上です (min=" + min + ", max=" + max + ")");
+    //                         continue;
+    //                     }
                         
-                        stockRanges.put(stockId, new StockRange(min, max));
-                        stockIdList.add(stockId);  // 順序を保持
+    //                     stockIdList.add(stockId);  // 順序を保持
                         
-                        // 初期価格を範囲内のランダム値で設定
-                        int initialPrice = (int) (min + (max - min) * random.nextDouble());
-                        currentPrices.put(stockId, new StockPrice(stockId, initialPrice, LocalTime.now()));
+    //                     // 初期価格を範囲内のランダム値で設定
+    //                     int initialPrice = (int) (min + (max - min) * random.nextDouble());
+    //                     currentPrices.put(stockId, new StockPrice(stockId, initialPrice, LocalTime.now()));
                         
-                        readStockCount++;  // 正常に読み込めた場合のみカウント
+    //                     readStockCount++;  // 正常に読み込めた場合のみカウント
                         
-                    } catch (NumberFormatException e) {
-                        System.out.println("行 " + lineNumber + " をスキップします: 数値形式エラー - " + e.getMessage());
-                        continue;
-                    }
-                } else {
-                    System.out.println("行 " + lineNumber + " をスキップします: 列数が不足しています (必要: 4列, 実際: " + parts.length + "列)");
-                }
-            }
+    //                 } catch (NumberFormatException e) {
+    //                     System.out.println("行 " + lineNumber + " をスキップします: 数値形式エラー - " + e.getMessage());
+    //                     continue;
+    //                 }
+    //             } else {
+    //                 System.out.println("行 " + lineNumber + " をスキップします: 列数が不足しています (必要: 4列, 実際: " + parts.length + "列)");
+    //             }
+    //         }
             
-            // 株IDリストを数値順にソート
-            stockIdList.sort(Integer::compareTo);
+    //         // 株IDリストを数値順にソート
+    //         stockIdList.sort(Integer::compareTo);
             
-            if (stockRanges.isEmpty()) {
-                throw new IOException("有効な株価データが見つかりませんでした");
-            }
+
             
-            System.out.println("読み込み完了: " + readStockCount + "銘柄 (要求: " + maxStockCount + "銘柄)");
-            if (!stockIdList.isEmpty()) {
-                System.out.println("ID範囲: " + stockIdList.get(0) + " - " + stockIdList.get(stockIdList.size()-1));
-            }
+    //         System.out.println("読み込み完了: " + readStockCount + "銘柄 (要求: " + maxStockCount + "銘柄)");
+    //         if (!stockIdList.isEmpty()) {
+    //             System.out.println("ID範囲: " + stockIdList.get(0) + " - " + stockIdList.get(stockIdList.size()-1));
+    //         }
             
-            // 実際に読み込んだ銘柄数を設定に反映
-            Config.setCurrentStockCount(readStockCount);
-        }
-    }
+    //         // 実際に読み込んだ銘柄数を設定に反映
+    //         Config.setCurrentStockCount(でｑreadStockCount);
+    //     }
+    // }
     
-    // デフォルトデータで初期化（設定値を使用）
-    public static void initializeDefaultStockData() {
-        initializeDefaultStockData(Config.getCurrentStockCount());
-    }
+    // // デフォルトデータで初期化（設定値を使用）
+    // public static void initializeDefaultStockData() {
+    //     initializeDefaultStockData(Config.getCurrentStockCount());
+    // }
     
     // 指定した数の株IDで初期化
-    public static void initializeDefaultStockData(int stockCount) {
-        stockRanges.clear();
-        currentPrices.clear();
-        stockIdList.clear();
-        
-        for (int i = 1; i <= stockCount; i++) {
-            // デフォルトの価格範囲を3桁以下に制限
-            double min = 100.0 + (i % 300);  // 100円～399円
-            double max = min + 200.0 + (i % 300);  // 最大699円程度
-            
-            // 最大値を999円以下に制限
-            max = Math.min(max, 999.0);
-            
-            stockRanges.put(i, new StockRange(min, max));
-            stockIdList.add(i);
-            
-            int initialPrice = (int) (min + (max - min) * random.nextDouble());
-            currentPrices.put(i, new StockPrice(i, initialPrice, LocalTime.now()));
-        }
-        
-        System.out.println("デフォルトデータ初期化完了: " + stockCount + "銘柄");
-    }
+    // publo
     
     // 株価更新スケジューラーを開始するためのメソッド
     public static void startPriceUpdates(int intervalMs) {
@@ -256,20 +294,16 @@ public class StockPrice implements Serializable {
         
         // stockIdListに基づいて順序よく処理
         for (Integer stockId : stockIdList) {
-            StockRange range = stockRanges.get(stockId);
             
-            if (range != null) {
-                // 価格変動をより自然にするため、前回価格から小幅変動
-                StockPrice currentPrice = currentPrices.get(stockId);
-                int basePrice = (currentPrice != null) ? currentPrice.getPrice() : (int)range.min;
-                
+            
+            // 価格変動をより自然にするため、前回価格から小幅変動
+            StockPrice currentPrice = currentPrices.get(stockId);
+            if (currentPrice != null) {
+
                 // ±10%の範囲で変動、ただし範囲内に収める
-                double variation = 0.1 * (random.nextDouble() - 0.5) * 2; // -0.1 to 0.1
-                int newPrice = (int) Math.max(range.min, Math.min(range.max, basePrice * (1 + variation)));
-                
-                // 確実に999円以下にする
-                newPrice = Math.min(newPrice, 999);
-                
+                double variation = (random.nextGaussian() * 0.02); // 標準偏差2%
+                int newPrice = (int) Math.max(50.0, currentPrice.getPrice() * (1 + variation));
+
                 StockPrice updatedPrice = new StockPrice(stockId, newPrice, currentTime);
                 currentPrices.put(stockId, updatedPrice);
                 updatedPrices.add(updatedPrice);
@@ -423,7 +457,7 @@ public class StockPrice implements Serializable {
         stopPriceUpdatesInternal();
         scheduler.shutdown();
     }
-
+    
     // 表示用の時刻文字列を取得
     public String getFormattedTimestamp() {
         return timestamp.format(DISPLAY_FORMATTER);
@@ -433,7 +467,7 @@ public class StockPrice implements Serializable {
     public boolean isAfter(LocalTime other) {
         return timestamp.isAfter(other);
     }
-    
+
     public boolean isBefore(LocalTime other) {
         return timestamp.isBefore(other);
     }
@@ -462,19 +496,8 @@ public class StockPrice implements Serializable {
             // 設定を表示
             Config.printCurrentConfig();
             
-            // 銘柄数を変更したい場合（例：10銘柄に変更）
-            // Config.setCurrentStockCount(10);
-            
-            // CSVファイルから初期化を試行、失敗した場合はデフォルト初期化
-            try {
-                initializeStockData(Config.STOCK_PRICE_CSV_PATH);
-                System.out.println("CSVファイルから株価データを初期化しました");
-            } catch (IOException e) {
-                System.out.println("CSVファイルが見つかりません。デフォルトデータで初期化します");
-                initializeDefaultStockData();  // 設定値を自動使用
-            }
-            
-            System.out.println("初期化完了: " + stockRanges.size() + "銘柄");
+            // **PriceManagerが株価初期化を担当するため、ここでは初期化しない**
+            System.out.println("注意: 株価初期化はPriceManagerが担当します");
             
             // Socketサーバーを開始
             startSocketServer();
@@ -485,10 +508,10 @@ public class StockPrice implements Serializable {
                                  "(クライアント数: " + clientWriters.size() + ")");
             });
             
-            System.out.println("株価データ生成準備完了。クライアントの接続を待機中...");
+            System.out.println("StockPrice Socketサーバー準備完了。PriceManagerからのデータを待機中...");
             System.out.println("停止するにはCtrl+Cを押してください");
             
-            // シャットダウンフックを追加（Ctrl+C時の適切な終了処理）
+            // シャットダウンフック
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 System.out.println("\n株価更新を停止中...");
                 stopPriceUpdates();
@@ -496,7 +519,7 @@ public class StockPrice implements Serializable {
                 System.out.println("株価システムが正常に終了しました");
             }));
             
-            // メインスレッドを継続（Ctrl+Cまで実行）
+            // メインスレッドを継続
             Thread.currentThread().join();
             
         } catch (InterruptedException e) {
@@ -505,7 +528,6 @@ public class StockPrice implements Serializable {
             System.err.println("エラーが発生しました: " + e.getMessage());
             e.printStackTrace();
         } finally {
-            // 確実に停止処理を実行
             stopPriceUpdates();
             stopSocketServer();
         }
@@ -527,5 +549,47 @@ public class StockPrice implements Serializable {
         public int getStockId() { return stockId; }
         public double getPrice() { return price; }
         public String getTimestamp() { return timestamp; }
+    }
+
+    // 静的初期化メソッド（RunConfigurationから呼び出し用）
+    public static void initializeStockData() {
+        if (isInitialized) {
+            System.out.println("StockPrice already initialized");
+            return;
+        }
+        
+        try {
+            System.out.println("Loading stock metadata from CSV...");
+            // メタデータのロードのみ実行（価格初期化はPriceManagerが担当）
+            loadStockMetadata(Config.STOCK_META_CSV_PATH);
+            
+            System.out.println("Initializing stock prices via PriceManager...");
+            initializeStockPrices(); // これはPriceManager用のデータ準備のみ
+            
+            isInitialized = true;
+            System.out.println("StockPrice metadata loading completed. Loaded " + stockIdList.size() + " stocks");
+            System.out.println("実際の価格初期化はPriceManagerが実行します");
+            
+        } catch (Exception e) {
+            System.err.println("StockPrice initialization failed: " + e.getMessage());
+            throw new RuntimeException("Failed to initialize stock data", e);
+        }
+    }
+
+    // PriceManager用の初期価格データ提供（修正版）
+    public static ConcurrentHashMap<Integer, StockPrice> getInitialPricesForPriceManager() {
+        if (!isInitialized) {
+            throw new IllegalStateException("StockPrice not initialized. Call initializeStockData() first.");
+        }
+        
+        ConcurrentHashMap<Integer, StockPrice> initialPrices = new ConcurrentHashMap<>();
+        
+        // 現在の価格データをコピー
+        for (Map.Entry<Integer, StockPrice> entry : currentPrices.entrySet()) {
+            initialPrices.put(entry.getKey(), entry.getValue());
+        }
+        
+        System.out.println("Provided " + initialPrices.size() + " initial prices to PriceManager");
+        return initialPrices;
     }
 }

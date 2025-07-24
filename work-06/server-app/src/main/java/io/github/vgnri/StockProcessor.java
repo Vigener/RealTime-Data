@@ -1,6 +1,7 @@
 package io.github.vgnri;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Serializable;
 import java.net.Socket;
@@ -14,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.annotations.SerializedName;
@@ -21,11 +23,14 @@ import com.google.gson.annotations.SerializedName;
 import io.github.vgnri.config.Config;
 import io.github.vgnri.loader.MetadataLoader;
 import io.github.vgnri.model.Portfolio;
+import io.github.vgnri.model.PriceManager;
+import io.github.vgnri.model.PriceManager.TransactionData;
 import io.github.vgnri.model.ShareholderInfo;
 import io.github.vgnri.model.StockInfo;
 import io.github.vgnri.model.StockPrice;
 import io.github.vgnri.model.Transaction;
 import io.github.vgnri.server.WebsocketServer;
+import io.github.vgnri.util.LocalTimeTypeAdapter;
 
 public class StockProcessor {
     // 最新データを格納する共有データ構造（スレッドセーフ）
@@ -66,7 +71,9 @@ public class StockProcessor {
 
     // WebSocketサーバーとJSONパーサーの宣言
     private static WebsocketServer wsServer;
-    private static final Gson gson = new Gson();
+    private static final Gson gson = new GsonBuilder()
+        .registerTypeAdapter(LocalTime.class, new LocalTimeTypeAdapter())
+        .create();
 
     // 中間パース用のクラス
     private static class StockPriceDto {
@@ -105,6 +112,14 @@ public class StockProcessor {
 
         @SerializedName("timestamp")
         private String timestamp; // String型で受け取る
+
+        // コンストラクタを追加
+        public TransactionDto(int shareholderId, int stockId, int quantity, String timestamp) {
+            this.shareholderId = shareholderId;
+            this.stockId = stockId;
+            this.quantity = quantity;
+            this.timestamp = timestamp;
+        }
 
         // getters
         public int getShareholderId() {
@@ -270,50 +285,54 @@ public class StockProcessor {
         }
     }
 
+    private static Socket priceManagerSocket;
+    private static BufferedReader priceManagerReader;
+    private static volatile boolean isRunning = true;
+
     public static void main(String[] args) throws Exception {
         System.out.println("StockProcessor を開始します...");
 
-        // メタデータの読み込み
-        System.out.println("メタデータを読み込み中...");
-        StockMetadata.putAll(MetadataLoader.loadStockMetadata(Config.STOCK_META_CSV_PATH));
-        ShareholderMetadata.putAll(MetadataLoader.loadShareholderMetadata(Config.SHAREHOLDER_CSV_PATH));
-        System.out.println("メタデータ読み込み完了");
-
-        // 表示
-        System.out.println("登録銘柄数: " + StockMetadata.size());
-        System.out.println("登録株主数: " + ShareholderMetadata.size());
-
-        // WebSocketサーバーの起動
-        wsServer = new WebsocketServer();
-        wsServer.start();
-        System.out.println("WebSocketサーバーがポート " + wsServer.getPort() + " で起動しました。");
-
-        System.out.println("使用ポート確認:");
-        System.out.println("STOCK_PRICE_PORT: " + Config.STOCK_PRICE_PORT);
-        System.out.println("TRANSACTION_PORT: " + Config.TRANSACTION_PORT);
-
-        final Socket stockPriceSocket = new Socket("localhost", Config.STOCK_PRICE_PORT);
-        final Socket transactionSocket = new Socket("localhost", Config.TRANSACTION_PORT);
-
         try {
-            System.out.println("ソケット接続確認完了");
+            // メタデータの読み込み
+            System.out.println("メタデータを読み込み中...");
+            StockMetadata.putAll(MetadataLoader.loadStockMetadata(Config.STOCK_META_CSV_PATH));
+            ShareholderMetadata.putAll(MetadataLoader.loadShareholderMetadata(Config.SHAREHOLDER_CSV_PATH));
+            System.out.println("メタデータ読み込み完了");
 
-            // 受信ストリームの作成
-            // DataInputStream stockPriceInput = new DataInputStream(stockPriceSocket.getInputStream());
-            // DataInputStream transactionInput = new DataInputStream(transactionSocket.getInputStream());
+            System.out.println("登録銘柄数: " + StockMetadata.size());
+            System.out.println("登録株主数: " + ShareholderMetadata.size());
 
+            // WebSocketサーバーの起動
+            wsServer = new WebsocketServer();
+            wsServer.start();
+            System.out.println("WebSocketサーバーがポート " + wsServer.getPort() + " で起動しました。");
+
+            // シャットダウンフックを追加
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                System.out.println("\nStockProcessor シャットダウン開始...");
+                shutdown();
+                System.out.println("StockProcessor シャットダウン完了");
+            }));
+
+            // WebSocket接続待機
             System.out.println("Waiting for WebSocket connection from client...");
-            while (wsServer.getConnectionCount() < 1) {
+            while (wsServer.getConnectionCount() < 1 && isRunning) {
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    Thread.currentThread().interrupt();
+                    break;
                 }
             }
+            
+            if (!isRunning) {
+                System.out.println("StockProcessor が停止要求を受信しました");
+                return;
+            }
+            
             System.out.println("WebSocketクライアントが接続されました。");
 
-            // 初めにメタデータのうち、株主IDと株主名の対応関係だけWebソケットで送信
-            // 株主IDと株主名の対応関係をMapで作成し、WebSocketで送信
+            // 株主IDと株主名の対応関係を送信
             Map<Integer, String> shareholderIdNameMap = new HashMap<>();
             for (Map.Entry<Integer, ShareholderInfo> entry : ShareholderMetadata.entrySet()) {
                 shareholderIdNameMap.put(entry.getKey(), entry.getValue().getShareholderName());
@@ -323,190 +342,231 @@ public class StockProcessor {
             msg.put("ShareholderIdNameMap", shareholderIdNameMap);
             wsServer.broadcast(gson.toJson(msg));
 
-            // StockPriceの処理
-            // StockPriceとTransactionの受信・処理スレッドを作成
-            Thread stockPriceThread = new Thread(() -> {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(stockPriceSocket.getInputStream()))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        // 受信した行をパース
-                        String cleanLine = line.replaceFirst("^\\d+>\\s*", "");
+            // **PriceManagerサーバーに接続**
+            System.out.println("PriceManagerサーバーに接続中...");
+            try {
+                priceManagerSocket = new Socket("localhost", Config.PRICE_MANAGER_PORT);
+                priceManagerReader = new BufferedReader(new InputStreamReader(priceManagerSocket.getInputStream()));
+                System.out.println("PriceManagerサーバー接続完了");
 
-                        if (cleanLine == null || cleanLine.trim().isEmpty()) {
-                            continue; // 空行は無視
+                // **PriceManagerデータ受信スレッドを開始**
+                Thread priceManagerThread = new Thread(() -> {
+                    System.out.println("PriceManagerデータ受信スレッド開始");
+                    
+                    try {
+                        String line;
+                        while (isRunning && (line = priceManagerReader.readLine()) != null) {
+                            try {
+                                // JSONデータを解析
+                                if (line.contains("\"transaction\"")) {
+                                    // TransactionWithPriceデータ（リアルタイム取引）
+                                    PriceManager.TransactionWithPrice txWithPrice = 
+                                        gson.fromJson(line, PriceManager.TransactionWithPrice.class);
+                                    
+                                    System.out.println("← リアルタイム取引受信: 株ID=" + 
+                                                     txWithPrice.getTransaction().getStockId() + 
+                                                     ", 価格=" + txWithPrice.getCurrentPrice());
+                                    
+                                    processTransactionWithGuaranteedPrice(txWithPrice);
+                                    
+                                } else if (line.contains("\"updatedPrices\"")) {
+                                    // 価格更新データ（初期データまたは定期更新）
+                                    PriceManager.PriceUpdateData priceUpdate = 
+                                        gson.fromJson(line, PriceManager.PriceUpdateData.class);
+                                    
+                                    boolean isInitialData = priceUpdate.getUpdatedPrices().size() > 50; // 50銘柄以上なら初期データと判定
+                                    
+                                    if (isInitialData) {
+                                        System.out.println("← 初期価格データ受信: " + priceUpdate.getUpdatedPrices().size() + "銘柄");
+                                    } else {
+                                        System.out.println("← 価格更新受信: " + priceUpdate.getUpdatedPrices().size() + "銘柄");
+                                    }
+                                    
+                                    processPriceUpdate(priceUpdate.getUpdatedPrices());
+                                    
+                                } else {
+                                    System.out.println("← 不明なデータ形式: " + line.substring(0, Math.min(100, line.length())));
+                                }
+                                
+                            } catch (Exception e) {
+                                System.err.println("PriceManagerデータ処理エラー: " + e.getMessage());
+                                System.err.println("問題のあるデータ: " + line.substring(0, Math.min(200, line.length())));
+                            }
                         }
-
-                        // JSONパース
-                        StockPriceDto dto = gson.fromJson(cleanLine, StockPriceDto.class);
-
-                        // DTOの値を検証
-                        if (dto == null || dto.getStockId() <= 0 || dto.getPrice() <= 0.0) {
-                            System.err.println("無効なStockPriceデータ: " + cleanLine);
-                            continue; // 無効なデータは無視
+                    } catch (IOException e) {
+                        if (isRunning) {
+                            System.err.println("PriceManager受信エラー: " + e.getMessage());
                         }
-
-                        // StockPriceオブジェクトを作成
-                        StockPrice stockPrice = new StockPrice(
-                                dto.getStockId(),
-                                dto.getPrice(),
-                                parseTimestamp(dto.getTimestamp()));
-
-                        stockPriceMap.put(stockPrice.getStockId(), stockPrice.getPrice());
-
-                        // 最新データに追加
-                        List<StockPrice> currentPrices = latestStockPrices.get();
-                        if (currentPrices == null) {
-                            currentPrices = new ArrayList<>();
+                    } finally {
+                        System.out.println("PriceManagerデータ受信スレッド終了");
+                        try {
+                            if (priceManagerReader != null) priceManagerReader.close();
+                            if (priceManagerSocket != null) priceManagerSocket.close();
+                        } catch (IOException e) {
+                            System.err.println("PriceManagerソケットクローズエラー: " + e.getMessage());
                         }
-                        currentPrices.add(stockPrice);
-                        latestStockPrices.set(currentPrices);
                     }
-                } catch (Exception e) {
-                    System.err.println("StockPrice受信エラー: " + e.getMessage());
-                }
-            });
+                });
 
-            Thread transactionThread = new Thread(() -> {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(transactionSocket.getInputStream()))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        processTransactionLine(line);
-                    }
-                } catch (Exception e) {
-                    System.err.println("Transaction受信エラー: " + e.getMessage());
-                }
-            });
+                priceManagerThread.setDaemon(true);
+                priceManagerThread.start();
 
-            // スレッドをデーモンとして設定
-            stockPriceThread.setDaemon(true);
-            transactionThread.setDaemon(true);
+                System.out.println("PriceManagerとの通信開始完了");
+            } catch (IOException e) {
+                System.err.println("PriceManagerサーバーへの接続に失敗しました: " + e.getMessage());
+                return;
+            }
 
-            // スレッド開始
-            stockPriceThread.start();
-            transactionThread.start();
-            System.out.println("データ受信スレッドを開始しました。");
-
-            // 定期的な分析・送信処理（メインスレッド）
+            // メインループ（分析・統計処理）
             while (true) {
                 try {
-                    Thread.sleep(1000); // 1秒間隔で分析
-                    // performAnalysis();
+                    Thread.sleep(1000);
+                    // 統計処理など
                 } catch (InterruptedException e) {
-                    System.err.println("メインループが中断されました。");
                     break;
                 }
             }
         } finally {
-            try {
-                stockPriceSocket.close();
-            } catch (Exception e) {
-                /* ignore */ }
-            try {
-                transactionSocket.close();
-            } catch (Exception e) {
-                /* ignore */ }
+            // シャットダウン処理
+            shutdown();
         }
-
     }
 
-    private static void processTransactionLine(String line) {
-        // 1. JSON→Transactionへパース
-        TransactionDto dto = gson.fromJson(line, TransactionDto.class);
-        if (dto == null || dto.getShareholderId() <= 0 || dto.getStockId() <= 0) {
-            System.err.println("無効なTransactionデータ: " + line);
-            return;
+    // シャットダウン処理メソッド
+    private static void shutdown() {
+        System.out.println("StockProcessor シャットダウン開始...");
+        isRunning = false;
+        
+        // WebSocketサーバー停止（改善版）
+        if (wsServer != null) {
+            try {
+                System.out.println("WebSocketサーバー停止中...");
+                
+                // 通常の停止を試行
+                wsServer.stop();
+                
+                // 少し待機
+                Thread.sleep(2000);
+                
+                // まだ動いている場合は強制停止
+                if (!wsServer.isClosed()) {
+                    System.out.println("WebSocketサーバー強制停止を実行...");
+                    wsServer.forceStop();
+                    Thread.sleep(1000);
+                }
+                
+                System.out.println("WebSocketサーバー停止完了");
+                
+            } catch (Exception e) {
+                System.err.println("WebSocketサーバー停止中にエラー: " + e.getMessage());
+                
+                // 最終手段：強制停止
+                try {
+                    if (wsServer != null) {
+                        wsServer.forceStop();
+                    }
+                } catch (Exception forceEx) {
+                    System.err.println("WebSocketサーバー強制停止エラー: " + forceEx.getMessage());
+                }
+            }
         }
-        Transaction transaction = new Transaction(
-                dto.getShareholderId(),
-                dto.getStockId(),
-                dto.getQuantity(),
-                parseTimestamp(dto.getTimestamp()));
 
+        // PriceManagerソケットクローズ
+        if (priceManagerSocket != null && !priceManagerSocket.isClosed()) {
+            try {
+                priceManagerSocket.close();
+                System.out.println("PriceManagerソケットクローズ完了");
+            } catch (IOException e) {
+                System.err.println("PriceManagerソケットクローズエラー: " + e.getMessage());
+            }
+        }
+        
+        System.out.println("StockProcessor シャットダウン完了");
+    }
+
+    // 外部からの停止要求メソッド
+    public static void requestShutdown() {
+        System.out.println("StockProcessor停止要求を受信");
+        isRunning = false;
+        shutdown();
+    }
+
+    // 価格更新処理メソッドを追加
+    private static void processPriceUpdate(List<StockPrice> updatedPrices) {
+        // この処理は初期データ受信時のみ使用し、リアルタイム更新では使用しない
+        System.out.println("価格更新受信: " + updatedPrices.size() + "銘柄 (初期データまたは参考情報)");
+        
+        // 参考情報として保存するが、取引処理には影響させない
+        for (StockPrice price : updatedPrices) {
+            // stockPriceMap.put(price.getStockId(), price.getPrice()); // コメントアウト
+        }
+    }
+
+    // 価格保証済み取引処理
+    private static void processTransactionWithGuaranteedPrice(PriceManager.TransactionWithPrice txWithPrice) {
+        TransactionData transaction = txWithPrice.getTransaction();
+        int guaranteedPrice = txWithPrice.getCurrentPrice();
+        
+        // **重要**: 保証価格を使用し、stockPriceMapは参考程度に留める
+    
         // 追加情報の取得
         String shareholderName = "";
         String stockName = "";
-        int currentPrice = 0;
-        int acquisitionPrice = 0; // 取得単価
-
+        
         ShareholderInfo shInfo = ShareholderMetadata.get(transaction.getShareholderId());
-        if (shInfo != null)
-            shareholderName = shInfo.getShareholderName();
+        if (shInfo != null) shareholderName = shInfo.getShareholderName();
+        
         StockInfo stInfo = StockMetadata.get(transaction.getStockId());
-        if (stInfo != null)
-            stockName = stInfo.getStockName();
-        Integer price = stockPriceMap.get(transaction.getStockId());
-        // System.out.println("current_price"+price);
-        if (price != null) {
-            currentPrice = price;
-            acquisitionPrice = price;
-        }
+        if (stInfo != null) stockName = stInfo.getStockName();
+        
+        // **修正**: 保証価格を一貫して使用
+        int previousPrice = stockPriceMap.getOrDefault(transaction.getStockId(), guaranteedPrice);
+        
+        // ポートフォリオ更新（保証価格を使用）
+        updatePortfolio(transaction.getShareholderId(), transaction.getStockId(), 
+                       stockName, transaction.getQuantity(), guaranteedPrice);
 
-        // ポートフォリオ更新
-        updatePortfolio(transaction.getShareholderId(), transaction.getStockId(), stockName, transaction.getQuantity(), acquisitionPrice);
+        // **重要**: stockPriceMapも保証価格で更新（一貫性のため）
+        stockPriceMap.put(transaction.getStockId(), guaranteedPrice);
 
-        // Mapにまとめてバッファに追加
+        // バッファに追加
         Map<String, Object> tx = new HashMap<>();
         tx.put("shareholderId", transaction.getShareholderId());
         tx.put("shareholderName", shareholderName);
         tx.put("stockId", transaction.getStockId());
         tx.put("stockName", stockName);
         tx.put("quantity", transaction.getQuantity());
-        tx.put("timestamp", transaction.getTimestamp().toString());
-        tx.put("currentPrice", currentPrice);
-        tx.put("acquisitionPrice", acquisitionPrice); // 取得単価
+        tx.put("timestamp", transaction.getTimestamp());
+        tx.put("currentPrice", (double) guaranteedPrice); // 保証価格を使用
+        tx.put("previousPrice", (double) previousPrice);
+        tx.put("acquisitionPrice", (double) guaranteedPrice);
 
         synchronized (bufferLock) {
             transactionBuffer.add(tx);
         }
 
-        // 3. ウィンドウ初期化・更新（スレッドセーフ）
+        // ウィンドウ処理
         synchronized (windowLock) {
             LocalTime[] window = windowRef.get();
             if (window == null) {
-                LocalTime start = transaction.getTimestamp();
+                LocalTime start = parseTimestamp(transaction.getTimestamp());
                 LocalTime end = start.plusSeconds(WINDOW_SIZE_SECONDS);
                 window = new LocalTime[] { start, end };
                 windowRef.set(window);
                 System.out.println("Window initialized: " + dtf.format(window[0]) + " to " + dtf.format(window[1]));
             }
             window = windowRef.get();
-            // 4. ウィンドウ終了時刻を超えたら集計
-            if (transaction.getTimestamp().isAfter(window[1])) {
-
-                // aggregateAndSend(); // 取引履歴の集計とポートフォリオの更新とそれらの送信
-                
-                // ウィンドウをスライド
+            
+            LocalTime transactionTime = parseTimestamp(transaction.getTimestamp());
+            
+            if (transactionTime.isAfter(window[1])) {
                 LocalTime newStart = window[0].plusSeconds(SLIDE_SIZE_SECONDS);
                 LocalTime newEnd = window[1].plusSeconds(SLIDE_SIZE_SECONDS);
                 window[0] = newStart;
                 window[1] = newEnd;
                 windowRef.set(window);
 
-                // 集計と送信、バッファのクリア
                 aggregateAndSendWithCleanup(newStart); 
-
-
-                // // transactionBufferの先頭部分を表示
-                // synchronized (bufferLock) {
-                //     if (!transactionBuffer.isEmpty()) {
-                //         int displayCount = Math.min(3, transactionBuffer.size()); // 最大3件表示
-                //         System.out.println("Window updated - Buffer contents (" + transactionBuffer.size() + " total):");
-                //         for (int i = 0; i < displayCount; i++) {
-                //             Map<String, Object> txItem = transactionBuffer.get(i);
-                //             System.out.println("  [" + i + "] 株主:" + txItem.get("shareholderId") + 
-                //                              " 銘柄:" + txItem.get("stockId") + 
-                //                              " 数量:" + txItem.get("quantity") + 
-                //                              " 時刻:" + txItem.get("timestamp"));
-                //         }
-                //         if (transactionBuffer.size() > displayCount) {
-                //             System.out.println("  ... and " + (transactionBuffer.size() - displayCount) + " more");
-                //         }
-                //     } else {
-                //         System.out.println("Window updated - Buffer is empty");
-                //     }
-                // }
             }
         }
     }
@@ -958,10 +1018,10 @@ public class StockProcessor {
             stockInfo.put("stockId", stockId);
             stockInfo.put("stockName", stockName);
             stockInfo.put("quantity", quantity);
-            stockInfo.put("averageCost", avgCost);
-            stockInfo.put("currentPrice", currentPrice);
-            stockInfo.put("profit", profit);
-            stockInfo.put("region", region); // 地域情報を追加
+            stockInfo.put("averageCost", (double) avgCost);     // double型に統一
+            stockInfo.put("currentPrice", (double) currentPrice); // double型に統一
+            stockInfo.put("profit", (double) profit);           // double型に統一
+            stockInfo.put("region", region);
             stockList.add(stockInfo);
 
             // 全体集計
@@ -1037,4 +1097,5 @@ public class StockProcessor {
             this.totalProfit += profit;
         }
     }
+
 }
