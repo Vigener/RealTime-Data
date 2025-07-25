@@ -256,12 +256,12 @@ public class Transaction implements Serializable {
         }
         
         // **追加**: StockProcessor接続チェック
-        if (!isStockProcessorConnected()) {
-            if (System.currentTimeMillis() % 5000 < 1000) { // 5秒に1回ログ
-                System.out.println("StockProcessor未接続のため、取引生成を待機中...");
-            }
-            return; // 取引生成をスキップ（停止はしない）
-        }
+        // if (!isStockProcessorConnected()) {
+        //     if (System.currentTimeMillis() % 5000 < 1000) { // 5秒に1回ログ
+        //         System.out.println("StockProcessor未接続のため、取引生成を待機中...");
+        //     }
+        //     return; // 取引生成をスキップ（停止はしない）
+        // }
         
         LocalTime baseTime = LocalTime.now();
         List<Transaction> transactions = new ArrayList<>();

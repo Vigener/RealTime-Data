@@ -164,6 +164,23 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
     },
   };
 
+  // **追加**: ポートフォリオテーブル用のスタイル
+  const portfolioHeaderStyle = {
+    position: "sticky" as const,
+    top: 0,
+    backgroundColor: "#f8f9fa",
+    zIndex: 10,
+    boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+  };
+
+  const portfolioThStyle = {
+    backgroundColor: "#f8f9fa",
+    borderBottom: "2px solid #dee2e6",
+    fontWeight: "600" as const,
+    padding: "12px 8px",
+    whiteSpace: "nowrap" as const,
+  };
+
   return (
     <div>
       <h2>ポートフォリオ</h2>
@@ -205,10 +222,15 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
             </span>
           </h3>
 
+          {/* **修正**: ポートフォリオテーブルに固定ヘッダーを追加 */}
           <div
             style={{
               maxHeight: `600px`,
               overflowY: "auto",
+              border: "1px solid #dee2e6",
+              borderRadius: "0.375rem",
+              backgroundColor: "white",
+              marginBottom: "20px",
             }}
           >
             <Table
@@ -217,39 +239,64 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
               bordered
               hover
               style={{
-                fontSize: "1rem",
+                fontSize: "0.95rem",
                 marginBottom: 0,
               }}
             >
-              <thead>
+              <thead style={portfolioHeaderStyle}>
                 <tr>
-                  <th>株式ID</th>
-                  <th>株式名</th>
-                  <th>地域</th>
-                  <th>保有株数</th>
-                  <th>平均取得単価</th>
-                  <th>現在の株価</th>
-                  <th>評価損益</th>
+                  <th style={portfolioThStyle}>株式ID</th>
+                  <th style={portfolioThStyle}>株式名</th>
+                  <th style={portfolioThStyle}>地域</th>
+                  <th style={portfolioThStyle}>保有株数</th>
+                  <th style={portfolioThStyle}>平均取得単価</th>
+                  <th style={portfolioThStyle}>現在の株価</th>
+                  <th style={portfolioThStyle}>評価損益</th>
                 </tr>
               </thead>
-              <tbody>
-                {portfolioSummary.stocks.map(stock => (
-                  <tr key={stock.stockId}>
-                    <td>{stock.stockId}</td>
-                    <td>{stock.stockName}</td>
-                    <td>{getRegionDisplayName(stock.region)}</td>
-                    <td>{stock.quantity.toLocaleString()}</td>
-                    <td>{stock.averageCost.toLocaleString()}円</td>
-                    <td>{stock.currentPrice.toLocaleString()}円</td>
-                    <td>
-                      <span style={{ color: stock.profit > 0 ? "green" : stock.profit < 0 ? "red" : "inherit" }}>
-                        {stock.profit > 0 ? "+" : ""}
-                        {stock.profit.toLocaleString()}円
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+              {shouldShowPortfolio && (
+                <tbody>
+                  {portfolioSummary.stocks
+                    .filter(stock => stock.quantity > 0) // **追加**: マイナス保有を除外
+                    .map(stock => (
+                      <tr key={stock.stockId}>
+                        <td style={{ textAlign: "center" }}>{stock.stockId}</td>
+                        <td>{stock.stockName}</td>
+                        <td style={{ textAlign: "center" }}>{getRegionDisplayName(stock.region)}</td>
+                        <td style={{ textAlign: "right" }}>
+                          <span style={{ 
+                            fontWeight: stock.quantity > 100 ? "bold" : "500",
+                            color: stock.quantity > 0 ? "inherit" : "#dc3545" // マイナス保有の場合は赤色
+                          }}>
+                            {stock.quantity.toLocaleString()}
+                          </span>
+                          <span style={{ 
+                            marginLeft: "4px", 
+                            fontSize: "0.85em", 
+                            color: "#6c757d"
+                          }}>
+                            株
+                          </span>
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          {stock.averageCost.toLocaleString()}円
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          {stock.currentPrice.toLocaleString()}円
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <span style={{ 
+                            color: stock.profit > 0 ? "#28a745" : stock.profit < 0 ? "#dc3545" : "inherit",
+                            fontWeight: Math.abs(stock.profit) > 100000 ? "bold" : "500" // 10万円以上の損益は太字
+                          }}>
+                            {stock.profit > 0 ? "+" : ""}
+                            {stock.profit.toLocaleString()}円
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              )}
             </Table>
           </div>
           
@@ -279,14 +326,20 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
                       .map(([region, regionData]) => (
                       <tr key={region}>
                         <td>{getRegionDisplayName(region)}</td>
-                        <td>{regionData.asset.toLocaleString()}円</td>
-                        <td style={{ color: regionData.profit > 0 ? "green" : regionData.profit < 0 ? "red" : "inherit" }}>
+                        <td style={{ textAlign: "right" }}>{regionData.asset.toLocaleString()}円</td>
+                        <td style={{ 
+                          color: regionData.profit > 0 ? "#28a745" : regionData.profit < 0 ? "#dc3545" : "inherit",
+                          textAlign: "right"
+                        }}>
                           {regionData.profit > 0 ? "+" : ""}{regionData.profit.toLocaleString()}円
                         </td>
-                        <td style={{ color: regionData.profitRate > 0 ? "green" : regionData.profitRate < 0 ? "red" : "inherit" }}>
+                        <td style={{ 
+                          color: regionData.profitRate > 0 ? "#28a745" : regionData.profitRate < 0 ? "#dc3545" : "inherit",
+                          textAlign: "right"
+                        }}>
                           {regionData.profitRate > 0 ? "+" : ""}{(regionData.profitRate * 100).toFixed(2)}%
                         </td>
-                        <td>{(regionData.assetRatio * 100).toFixed(1)}%</td>
+                        <td style={{ textAlign: "right" }}>{(regionData.assetRatio * 100).toFixed(1)}%</td>
                       </tr>
                     ))}
                   </tbody>
@@ -294,8 +347,6 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
               </div>
             </div>
           )}
-
-          
         </div>
       )}
     </div>

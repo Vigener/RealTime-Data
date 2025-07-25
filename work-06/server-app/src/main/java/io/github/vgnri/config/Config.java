@@ -15,7 +15,7 @@ public class Config {
     
     // 株価関連の設定
     public static final int MAX_STOCK_COUNT = 3000;        // 最大銘柄数
-    public static final int DEFAULT_STOCK_COUNT = 300;       // デフォルト銘柄数
+    public static final int DEFAULT_STOCK_COUNT = 100;       // デフォルト銘柄数
     // public static final int DEFAULT_STOCK_COUNT = 5;       // デフォルト銘柄数
     
     // 株主関連の設定
