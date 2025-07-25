@@ -31,7 +31,7 @@ const TransactionHistorySection: React.FC<Props> = ({
             <strong>表示区間: </strong> {transactionHistory.windowStart} 〜 {transactionHistory.windowEnd}
             </div>
           <div>
-            <strong>取引数: </strong>{transactionHistory.transactions.length}
+            <strong>取引件数: </strong>{transactionHistory.transactions.length}
           </div>
         </div>
       )}

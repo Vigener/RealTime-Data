@@ -76,7 +76,7 @@ public class Config {
     }
     
     // 株価データ
-    public static final String STOCK_PRICE_CSV_PATH = getResourcePath("stock_price_data.csv");
+    // public static final String STOCK_PRICE_CSV_PATH = getResourcePath("stock_price_data.csv");
     // 株メタデータ
     public static final String STOCK_META_CSV_PATH = getResourcePath("stock_metadata.csv");
     // 株主データ
