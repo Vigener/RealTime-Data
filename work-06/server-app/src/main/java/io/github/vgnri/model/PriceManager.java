@@ -1,6 +1,8 @@
 package io.github.vgnri.model;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -11,7 +13,9 @@ import java.net.Socket;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -29,6 +33,7 @@ import com.google.gson.JsonSerializer;
 import com.google.gson.JsonSyntaxException;
 
 import io.github.vgnri.config.Config;
+import io.github.vgnri.loader.MetadataLoader;
 
 public class PriceManager {
     private static final ConcurrentHashMap<Integer, StockPrice> currentPrices = new ConcurrentHashMap<>();
@@ -79,35 +84,53 @@ public class PriceManager {
         }
     }
     
+    /**
+     * 独立サーバーとして起動するためのmain()メソッド
+     */
     public static void main(String[] args) {
-        System.out.println("=== PriceManager独立サーバー起動 ===");
-        
         try {
-            // 1. 初期価格データを読み込み
-            loadInitialPrices();
-            
-            // 2. Transactionサーバーに接続
+            System.out.println("=== PriceManager独立サーバー起動 ===");
+        
+            // Transactionサーバーに接続
             connectToTransactionServer();
             
-            // 3. StockProcessor用のサーバーを起動
+            // **新規追加**: Transaction.java用の双方向通信サーバーを開始
+            startTransactionListenerServer();
+            
+            // StockProcessor通信サーバーを開始
             startStockProcessorServer();
             
-            // 4. 定期価格送信スケジューラーを開始
-            // startPriceBroadcastScheduler();
+            // 初期価格データ読み込み
+            loadInitialPrices();
             
-            // 5. Transactionデータ受信開始
+            
+            // Transaction受信開始
             startTransactionReceiver();
             
             System.out.println("PriceManagerサーバー準備完了");
-            System.out.println("ポート情報:");
-            System.out.println("  - Transaction接続先: " + Config.TRANSACTION_PORT);
-            System.out.println("  - StockProcessor待受: " + Config.PRICE_MANAGER_PORT);
+            System.out.println("データフロー: Transaction → PriceManager → StockProcessor");
             
-            // メインスレッドを継続
-            Thread.currentThread().join();
+            // シャットダウンフック
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                System.out.println("\n=== PriceManager サーバー停止中 ===");
+                shutdown();
+                System.out.println("PriceManager サーバー停止完了");
+            }));
+            
+            // メインループ（サーバーを維持）
+            while (true) {
+                try {
+                    Thread.sleep(5000);
+                    // 接続状況表示（5秒ごと）
+                    System.out.println("接続状況 - StockProcessor: " + stockProcessorWriters.size() + "接続");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
             
         } catch (Exception e) {
-            System.err.println("PriceManagerサーバーエラー: " + e.getMessage());
+            System.err.println("PriceManager サーバー起動エラー: " + e.getMessage());
             e.printStackTrace();
         } finally {
             shutdown();
@@ -118,45 +141,297 @@ public class PriceManager {
      * 初期価格データを読み込み
      */
     private static void loadInitialPrices() {
+        String filePath = Config.INITIAL_PRICE_CSV_PATH;
+        int expectedStockCount = Config.getCurrentStockCount();
+        
+        System.out.println("初期価格データ読み込み開始 (期待銘柄数: " + expectedStockCount + ")");
+        
         try {
-            String filePath = "initial_prices.csv";
             try (BufferedReader reader = new BufferedReader(new java.io.FileReader(filePath))) {
                 String line = reader.readLine(); // ヘッダースキップ
                 
+                if (line == null) {
+                    throw new IOException("CSVファイルが空です");
+                }
+                
+                System.out.println("CSVヘッダー: " + line);
+                
+                int loadedCount = 0;
                 while ((line = reader.readLine()) != null) {
                     String[] parts = line.split(",");
                     if (parts.length >= 3) {
-                        int stockId = Integer.parseInt(parts[0]);
-                        int price = Integer.parseInt(parts[1]);
-                        LocalTime timestamp = LocalTime.parse(parts[2]);
-                        
-                        StockPrice initialPrice = new StockPrice(stockId, price, timestamp);
-                        currentPrices.put(stockId, initialPrice);
+                        try {
+                            int stockId = Integer.parseInt(parts[0]);
+                            int price = Integer.parseInt(parts[1]);
+                            LocalTime timestamp = LocalTime.parse(parts[2]);
+                            
+                            StockPrice initialPrice = new StockPrice(stockId, price, timestamp);
+                            currentPrices.put(stockId, initialPrice);
+                            loadedCount++;
+                        } catch (Exception e) {
+                            System.err.println("CSVライン解析エラー: " + line + " - " + e.getMessage());
+                        }
                     }
                 }
                 
-                System.out.println("初期価格データ読み込み完了: " + currentPrices.size() + "銘柄");
+                // 読み込み数と期待数を比較
+                if (loadedCount != expectedStockCount) {
+                    throw new RuntimeException(
+                        "読み込み銘柄数が設定と異なります。期待: " + expectedStockCount + 
+                        ", 実際: " + loadedCount);
+                }
+                
+                // 株IDの範囲チェック
+                boolean hasAllExpectedStocks = true;
+                StringBuilder missingStocks = new StringBuilder();
+                
+                for (int i = 1; i <= expectedStockCount; i++) {
+                    if (!currentPrices.containsKey(i)) {
+                        hasAllExpectedStocks = false;
+                        if (missingStocks.length() > 0) {
+                            missingStocks.append(", ");
+                        }
+                        missingStocks.append(i);
+                    }
+                }
+                
+                if (!hasAllExpectedStocks) {
+                    throw new RuntimeException(
+                        "必要な株ID(1-" + expectedStockCount + ")が不足しています。不足ID: " + 
+                        missingStocks.toString());
+                }
+                
+                System.out.println("✓ initial_prices.csv から初期価格データ読み込み完了: " + loadedCount + "銘柄");
+                System.out.println("  株ID範囲: 1-" + expectedStockCount + " すべて確認済み");
+                
+                // 価格データの簡易統計表示
+                displayLoadedPriceStatistics(loadedCount);
+                
                 isInitialized = true;
                 
             }
-        } catch (Exception e) {
-            System.err.println("初期価格データ読み込みエラー: " + e.getMessage());
+        } catch (java.io.FileNotFoundException e) {
+            System.err.println("初期価格データファイルが見つかりません: " + filePath);
+            System.out.println("新しい初期価格データを生成します...");
+            
             // デフォルト価格で初期化
             initializeDefaultPrices();
+            
+            // 生成した価格をファイルに保存
+            saveInitialPricesToFile(filePath);
+            
+        } catch (Exception e) {
+            System.err.println("初期価格データ読み込みエラー: " + e.getMessage());
+            System.out.println("新しい初期価格データを生成します...");
+            
+            // 既存のデータをクリア
+            currentPrices.clear();
+            
+            // デフォルト価格で初期化
+            initializeDefaultPrices();
+            
+            // 生成した価格をファイルに保存
+            saveInitialPricesToFile(filePath);
+        }
+    }
+
+    /**
+     * 読み込み済み価格データの簡易統計表示
+     */
+    private static void displayLoadedPriceStatistics(int loadedCount) {
+        if (currentPrices.isEmpty()) return;
+        
+        List<Integer> prices = currentPrices.values().stream()
+            .mapToInt(StockPrice::getPrice)
+            .boxed()
+            .sorted()
+            .collect(java.util.stream.Collectors.toList());
+        
+        int min = prices.get(0);
+        int max = prices.get(prices.size() - 1);
+        double average = prices.stream().mapToInt(Integer::intValue).average().orElse(0);
+        
+        System.out.println("  読み込み価格統計:");
+        System.out.println("    最低価格: " + min + "円");
+        System.out.println("    最高価格: " + max + "円");
+        System.out.println("    平均価格: " + String.format("%.0f", average) + "円");
+        
+        // 価格帯分布
+        long under1000 = prices.stream().filter(p -> p < 1000).count();
+        long between1000and2000 = prices.stream().filter(p -> p >= 1000 && p < 2000).count();
+        long over2000 = prices.stream().filter(p -> p >= 2000).count();
+        
+        System.out.println("    価格分布: 1000円未満=" + under1000 + "銘柄, " +
+                         "1000-2000円=" + between1000and2000 + "銘柄, " +
+                         "2000円以上=" + over2000 + "銘柄");
+    }
+    
+    /**
+     * StockPriceCalculatorを使用したデフォルト価格初期化
+     */
+    private static void initializeDefaultPrices() {
+        System.out.println("=== StockPriceCalculatorによる株価計算開始 ===");
+        
+        // MetadataLoaderを使用して株式メタデータを読み込み
+        ConcurrentHashMap<Integer, StockInfo> stockInfoMap = MetadataLoader.loadStockMetadata(Config.STOCK_META_CSV_PATH);
+        
+        int stockCount = Config.getCurrentStockCount();
+        System.out.println("初期化対象株式数: " + stockCount + "銘柄");
+        
+        for (int i = 1; i <= stockCount; i++) {
+            StockInfo stockInfo = stockInfoMap.get(i);
+            int calculatedPrice;
+            
+            if (stockInfo != null) {
+                // StockPriceCalculatorを使用して基準価格を計算
+                double basePrice = StockPriceCalculator.calculateBasePrice(stockInfo);
+                calculatedPrice = (int) Math.min(basePrice, 9999); // int範囲に制限
+                
+                // 最初の10件のみ詳細表示
+                if (i <= 10) {
+                    System.out.println("株ID=" + i + " (" + stockInfo.getStockName() + 
+                                     "): 配当=" + stockInfo.getDividendPerShare() + "円" +
+                                     ", 資本金=" + stockInfo.getCapitalStock() + "万円" +
+                                     ", 企業規模=" + stockInfo.getCompanyType().getDisplayName() +
+                                     ", 市場=" + stockInfo.getMarketType().getDisplayName() +
+                                     " → 株価=" + calculatedPrice + "円");
+                }
+            } else {
+                // メタデータがない場合はランダム生成
+                calculatedPrice = 500 + random.nextInt(500);
+                System.out.println("株ID=" + i + ": メタデータなし → ランダム株価=" + calculatedPrice + "円");
+            }
+            
+            StockPrice price = new StockPrice(i, calculatedPrice, LocalTime.now());
+            currentPrices.put(i, price);
+        }
+        
+        // 価格統計を表示
+        displayPriceStatistics(stockInfoMap);
+        
+        System.out.println("StockPriceCalculatorベース価格初期化完了: " + currentPrices.size() + "銘柄");
+        isInitialized = true;
+    }
+    
+    /**
+     * 価格統計を表示（MetadataLoaderで読み込んだデータを使用）
+     */
+    private static void displayPriceStatistics(ConcurrentHashMap<Integer, StockInfo> stockInfoMap) {
+        if (currentPrices.isEmpty()) return;
+        
+        List<Integer> prices = currentPrices.values().stream()
+            .mapToInt(StockPrice::getPrice)
+            .boxed()
+            .sorted()
+            .collect(java.util.stream.Collectors.toList());
+        
+        int min = prices.get(0);
+        int max = prices.get(prices.size() - 1);
+        double average = prices.stream().mapToInt(Integer::intValue).average().orElse(0);
+        int median = prices.get(prices.size() / 2);
+        
+        System.out.println("=== 株価統計情報 ===");
+        System.out.println("最低価格: " + min + "円");
+        System.out.println("最高価格: " + max + "円");
+        System.out.println("平均価格: " + String.format("%.0f", average) + "円");
+        System.out.println("中央価格: " + median + "円");
+        
+        // 企業規模別の価格分析
+        analyzeByCompanyType(stockInfoMap);
+        
+        // 価格帯別の分布
+        long under500 = prices.stream().filter(p -> p < 500).count();
+        long between500and1000 = prices.stream().filter(p -> p >= 500 && p < 1000).count();
+        long between1000and2000 = prices.stream().filter(p -> p >= 1000 && p < 2000).count();
+        long over2000 = prices.stream().filter(p -> p >= 2000).count();
+        
+        System.out.println("価格分布:");
+        System.out.println("  500円未満: " + under500 + "銘柄 (" + 
+                         String.format("%.1f", (double)under500/prices.size()*100) + "%)");
+        System.out.println("  500-1000円: " + between500and1000 + "銘柄 (" + 
+                         String.format("%.1f", (double)between500and1000/prices.size()*100) + "%)");
+        System.out.println("  1000-2000円: " + between1000and2000 + "銘柄 (" + 
+                         String.format("%.1f", (double)between1000and2000/prices.size()*100) + "%)");
+        System.out.println("  2000円以上: " + over2000 + "銘柄 (" + 
+                         String.format("%.1f", (double)over2000/prices.size()*100) + "%)");
+    }
+    
+    /**
+     * 企業規模別の価格分析（MetadataLoaderで読み込んだデータを使用）
+     */
+    private static void analyzeByCompanyType(ConcurrentHashMap<Integer, StockInfo> stockInfoMap) {
+        java.util.Map<StockInfo.CompanyType, java.util.List<Integer>> pricesByType = new java.util.HashMap<>();
+        
+        for (java.util.Map.Entry<Integer, StockPrice> entry : currentPrices.entrySet()) {
+            StockInfo stockInfo = stockInfoMap.get(entry.getKey());
+            if (stockInfo != null) {
+                pricesByType.computeIfAbsent(stockInfo.getCompanyType(), k -> new java.util.ArrayList<>())
+                           .add(entry.getValue().getPrice());
+            }
+        }
+        
+        System.out.println("企業規模別価格分析:");
+        for (StockInfo.CompanyType type : StockInfo.CompanyType.values()) {
+            java.util.List<Integer> prices = pricesByType.get(type);
+            if (prices != null && !prices.isEmpty()) {
+                double avg = prices.stream().mapToInt(Integer::intValue).average().orElse(0);
+                int min = prices.stream().mapToInt(Integer::intValue).min().orElse(0);
+                int max = prices.stream().mapToInt(Integer::intValue).max().orElse(0);
+                
+                System.out.println("  " + type.getDisplayName() + "企業 (" + prices.size() + "社): " +
+                                 "平均" + String.format("%.0f", avg) + "円, " +
+                                 "範囲" + min + "-" + max + "円");
+            }
         }
     }
     
     /**
-     * デフォルト価格で初期化
+     * 初期価格をCSVファイルに保存（MetadataLoaderで読み込んだデータを使用）
      */
-    private static void initializeDefaultPrices() {
-        for (int i = 1; i <= 100; i++) {
-            int defaultPrice = 500 + random.nextInt(500); // 500-999円
-            StockPrice price = new StockPrice(i, defaultPrice, LocalTime.now());
-            currentPrices.put(i, price);
+    private static void saveInitialPricesToFile(String filePath) {
+        // MetadataLoaderを使用して株式情報を再取得
+        ConcurrentHashMap<Integer, StockInfo> stockInfoMap = MetadataLoader.loadStockMetadata(Config.STOCK_META_CSV_PATH);
+        
+        try {
+            // ディレクトリが存在しない場合は作成
+            File file = new File(filePath);
+            if (!file.getParentFile().exists()) {
+                file.getParentFile().mkdirs();
+            }
+            
+            try (PrintWriter writer = new PrintWriter(new FileWriter(filePath))) {
+                // ヘッダー書き込み
+                writer.println("stock_id,price,timestamp,stock_name,company_type,market_type");
+                
+                // 価格データを書き込み（株ID順にソート）
+                currentPrices.entrySet().stream()
+                    .sorted((e1, e2) -> Integer.compare(e1.getKey(), e2.getKey()))
+                    .forEach(entry -> {
+                        int stockId = entry.getKey();
+                        StockPrice stockPrice = entry.getValue();
+                        StockInfo stockInfo = stockInfoMap.get(stockId);
+                        
+                        String stockName = (stockInfo != null) ? stockInfo.getStockName() : "Unknown";
+                        String companyType = (stockInfo != null) ? stockInfo.getCompanyType().getDisplayName() : "-";
+                        String marketType = (stockInfo != null) ? stockInfo.getMarketType().getDisplayName() : "-";
+                        
+                        writer.printf("%d,%d,%s,%s,%s,%s%n",
+                            stockId,
+                            stockPrice.getPrice(),
+                            stockPrice.getTimestamp().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSSSSS")),
+                            stockName,
+                            companyType,
+                            marketType
+                        );
+                    });
+                
+                System.out.println("✓ 初期価格データをファイルに保存しました: " + filePath);
+                System.out.println("  保存された銘柄数: " + currentPrices.size());
+                
+            }
+        } catch (IOException e) {
+            System.err.println("初期価格データ保存エラー: " + e.getMessage());
         }
-        System.out.println("デフォルト価格で初期化: " + currentPrices.size() + "銘柄");
-        isInitialized = true;
     }
     
     /**
@@ -596,5 +871,110 @@ public class PriceManager {
                 return LocalTime.now();
             }
         }
+    }
+    
+    // StockProcessor接続状態を管理
+    private static volatile boolean stockProcessorConnected = false;
+    private static final List<PrintWriter> transactionWriters = new CopyOnWriteArrayList<>();
+
+    // Transaction.javaからの接続を受け付ける新しいメソッド
+    private static void startTransactionListenerServer() {
+        Thread listenerThread = new Thread(() -> {
+            try {
+                ServerSocket transactionListenerSocket = new ServerSocket(Config.PRICE_MANAGER_PORT + 100); // 別ポート使用
+                System.out.println("Transaction通信用サーバー開始: ポート " + (Config.PRICE_MANAGER_PORT + 100));
+                
+                while (!transactionListenerSocket.isClosed()) {
+                    try {
+                        Socket transactionSocket = transactionListenerSocket.accept();
+                        System.out.println("Transaction.javaから接続: " + transactionSocket.getRemoteSocketAddress());
+                        
+                        PrintWriter transactionWriter = new PrintWriter(transactionSocket.getOutputStream(), true);
+                        transactionWriters.add(transactionWriter);
+                        
+                        // 現在のStockProcessor接続状態を即座に通知
+                        notifyTransactionOfStockProcessorStatus();
+                        
+                        // Transaction.javaからのメッセージを受信するスレッド
+                        Thread readerThread = new Thread(() -> {
+                            try (BufferedReader reader = new BufferedReader(new InputStreamReader(transactionSocket.getInputStream()))) {
+                                String line;
+                                while ((line = reader.readLine()) != null) {
+                                    // Transaction.javaからのメッセージを処理（必要に応じて）
+                                    System.out.println("Transaction.javaからメッセージ: " + line);
+                                }
+                            } catch (IOException e) {
+                                System.err.println("Transaction.java通信エラー: " + e.getMessage());
+                            } finally {
+                                transactionWriters.remove(transactionWriter);
+                            }
+                        });
+                        readerThread.setDaemon(true);
+                        readerThread.start();
+                        
+                    } catch (IOException e) {
+                        if (!transactionListenerSocket.isClosed()) {
+                            System.err.println("Transaction接続エラー: " + e.getMessage());
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                System.err.println("Transaction通信サーバーエラー: " + e.getMessage());
+            }
+        });
+        
+        listenerThread.setDaemon(true);
+        listenerThread.start();
+    }
+
+    // StockProcessor接続時に呼び出されるメソッドを修正
+    private static void onStockProcessorConnected() {
+        stockProcessorConnected = true;
+        System.out.println("✓ StockProcessor接続確認");
+        
+        // Transaction.javaに接続状態を通知
+        notifyTransactionOfStockProcessorStatus();
+    }
+
+    // StockProcessor切断時に呼び出されるメソッドを修正
+    private static void onStockProcessorDisconnected() {
+        stockProcessorConnected = false;
+        System.out.println("⚠ StockProcessor切断検出");
+        
+        // Transaction.javaに切断状態を通知
+        notifyTransactionOfStockProcessorStatus();
+    }
+
+    // Transaction.javaにStockProcessor接続状態を通知
+    private static void notifyTransactionOfStockProcessorStatus() {
+        if (transactionWriters.isEmpty()) {
+            return;
+        }
+        
+        Map<String, Object> statusMessage = new HashMap<>();
+        statusMessage.put("type", "stockprocessor_status");
+        statusMessage.put("connected", stockProcessorConnected);
+        statusMessage.put("timestamp", LocalTime.now().toString());
+        
+        String json = gson.toJson(statusMessage);
+        
+        List<PrintWriter> writersToRemove = new ArrayList<>();
+        
+        for (PrintWriter writer : transactionWriters) {
+            try {
+                writer.println(json);
+                writer.flush();
+            } catch (Exception e) {
+                System.err.println("Transaction.javaへの状態通知エラー: " + e.getMessage());
+                writersToRemove.add(writer);
+            }
+        }
+        
+        // 切断されたWriterを削除
+        for (PrintWriter writer : writersToRemove) {
+            transactionWriters.remove(writer);
+        }
+        
+        System.out.println("Transaction.javaにStockProcessor状態通知送信: connected=" + stockProcessorConnected);
     }
 }

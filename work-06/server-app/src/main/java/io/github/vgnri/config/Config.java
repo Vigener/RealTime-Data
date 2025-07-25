@@ -15,7 +15,7 @@ public class Config {
     
     // 株価関連の設定
     public static final int MAX_STOCK_COUNT = 3000;        // 最大銘柄数
-    public static final int DEFAULT_STOCK_COUNT = 100;       // デフォルト銘柄数
+    public static final int DEFAULT_STOCK_COUNT = 300;       // デフォルト銘柄数
     // public static final int DEFAULT_STOCK_COUNT = 5;       // デフォルト銘柄数
     
     // 株主関連の設定
@@ -83,7 +83,10 @@ public class Config {
     public static final String SHAREHOLDER_CSV_PATH = getResourcePath("shareholder_metadata.csv");
     // つくば市のデータ
     public static final String TSUKUBA_CSV_PATH = getResourcePath("tsukuba_metadata.csv");
-    
+    // 初期価格データ
+    // public static final String INITIAL_PRICE_CSV_PATH = getResourcePath("initial_price_data.csv");
+    public static final String INITIAL_PRICE_CSV_PATH = "server-app/src/main/resources/initial_price_data.csv";
+
     public static final int WEBSOCKET_PORT = 3000; // WebSocketのポート番号
     public static final int PRICE_MANAGER_PORT = 2003;
 

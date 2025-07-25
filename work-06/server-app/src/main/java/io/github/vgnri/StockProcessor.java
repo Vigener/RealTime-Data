@@ -988,51 +988,59 @@ public class StockProcessor {
             return gson.toJson(emptyResult);
         }
 
-        int totalAsset = 0;
-        int totalCost = 0;
-        int totalProfit = 0;
+        // **修正**: AtomicIntegerまたは配列を使用してlambda内で値を変更可能にする
+        final int[] totals = new int[3]; // [totalAsset, totalCost, totalProfit]
         
         // 地域別集計用
         Map<String, RegionSummary> regionMap = new HashMap<>();
-
         List<Map<String, Object>> stockList = new ArrayList<>();
-        for (Portfolio.Entry entry : portfolio.getHoldings().values()) {
-            int stockId = entry.getStockId();
-            String stockName = entry.getStockName();
-            int quantity = entry.getTotalQuantity();
-            int avgCost = (int) Math.round(entry.getAverageCost());
-            
-            // 現在価格の安全な取得
-            Integer currentPriceInt = stockPriceMap.get(stockId);
-            Integer currentPrice = (currentPriceInt != null) ? currentPriceInt : 0;
-            
-            int asset = quantity * currentPrice;
-            int cost = quantity * avgCost;
-            int profit = asset - cost;
-            
-            // 地域判定（StockInfoのMarketTypeを使用）
-            String region = getStockRegion(stockId);
+        
+        // **修正**: 株ID順でソートしてから処理
+        portfolio.getHoldings().entrySet().stream()
+            .sorted(Map.Entry.comparingByKey()) // 株ID（キー）でソート
+            .forEach(entrySet -> {
+                Portfolio.Entry entry = entrySet.getValue();
+                int stockId = entry.getStockId();
+                String stockName = entry.getStockName();
+                int quantity = entry.getTotalQuantity();
+                int avgCost = (int) Math.round(entry.getAverageCost());
+                
+                // 現在価格の安全な取得
+                Integer currentPriceInt = stockPriceMap.get(stockId);
+                Integer currentPrice = (currentPriceInt != null) ? currentPriceInt : 0;
+                
+                int asset = quantity * currentPrice;
+                int cost = quantity * avgCost;
+                int profit = asset - cost;
+                
+                // 地域判定（StockInfoのMarketTypeを使用）
+                String region = getStockRegion(stockId);
 
-            // 保有株ごとの情報
-            Map<String, Object> stockInfo = new HashMap<>();
-            stockInfo.put("stockId", stockId);
-            stockInfo.put("stockName", stockName);
-            stockInfo.put("quantity", quantity);
-            stockInfo.put("averageCost", (double) avgCost);     // double型に統一
-            stockInfo.put("currentPrice", (double) currentPrice); // double型に統一
-            stockInfo.put("profit", (double) profit);           // double型に統一
-            stockInfo.put("region", region);
-            stockList.add(stockInfo);
+                // 保有株ごとの情報
+                Map<String, Object> stockInfo = new HashMap<>();
+                stockInfo.put("stockId", stockId);
+                stockInfo.put("stockName", stockName);
+                stockInfo.put("quantity", quantity);
+                stockInfo.put("averageCost", (double) avgCost);     // double型に統一
+                stockInfo.put("currentPrice", (double) currentPrice); // double型に統一
+                stockInfo.put("profit", (double) profit);           // double型に統一
+                stockInfo.put("region", region);
+                stockList.add(stockInfo);
 
-            // 全体集計
-            totalAsset += asset;
-            totalCost += cost;
-            totalProfit += profit;
-            
-            // 地域別集計
-            RegionSummary regionSummary = regionMap.computeIfAbsent(region, k -> new RegionSummary());
-            regionSummary.addStock(asset, cost, profit);
-        }
+                // **修正**: 配列を使用して集計値を更新
+                totals[0] += asset;  // totalAsset
+                totals[1] += cost;   // totalCost
+                totals[2] += profit; // totalProfit
+                
+                // 地域別集計
+                RegionSummary regionSummary = regionMap.computeIfAbsent(region, k -> new RegionSummary());
+                regionSummary.addStock(asset, cost, profit);
+            });
+
+        // **修正**: 配列から値を取得
+        int totalAsset = totals[0];
+        int totalCost = totals[1];
+        int totalProfit = totals[2];
         
         double profitRate = totalCost > 0 ? (double) totalProfit / totalCost : 0.0;
 
@@ -1042,7 +1050,7 @@ public class StockProcessor {
         result.put("totalAsset", totalAsset);
         result.put("totalProfit", totalProfit);
         result.put("profitRate", profitRate);
-        result.put("stocks", stockList);
+        result.put("stocks", stockList); // 既にstockId順でソート済み
         result.put("regionSummary", createRegionSummaryMap(regionMap, totalAsset));
 
         return gson.toJson(result);
