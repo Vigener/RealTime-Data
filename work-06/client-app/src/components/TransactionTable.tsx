@@ -2,7 +2,11 @@ import { useState } from "react";
 import { Table } from "react-bootstrap";
 import type { TransactionProps } from "../DataType";
 
-function TransactionTable({ TransactionData }: TransactionProps) {
+interface TransactionTableProps extends TransactionProps {
+  maxHeight?: number; // 後方互換性のため保持
+}
+
+function TransactionTable({ TransactionData, maxHeight = 715 }: TransactionTableProps) {
   if (!TransactionData || TransactionData.length === 0) {
     return (
       <div
@@ -18,7 +22,6 @@ function TransactionTable({ TransactionData }: TransactionProps) {
   }
 
   const [showAll, setShowAll] = useState(true);
-  const maxHeight = 900; // px, 最大高さ
 
   // ヘッダースタイル
   const headerStyle = {
@@ -39,14 +42,13 @@ function TransactionTable({ TransactionData }: TransactionProps) {
 
   return (
     <div>
+      {/* **修正**: TailwindCSSクラスを使用 */}
       <div
-        style={{
-          maxHeight: `${maxHeight}px`,
-          overflowY: "auto",
-          border: "1px solid #dee2e6",
-          borderRadius: "0.375rem",
-          backgroundColor: "white",
-        }}
+        className="
+          max-h-[715px] overflow-y-auto
+          xl:max-h-[1500px] xl:overflow-y-auto
+          border border-gray-300 rounded-md bg-white
+        "
       >
         <Table
           id="stock-table"
@@ -89,7 +91,6 @@ function TransactionTable({ TransactionData }: TransactionProps) {
                   <td style={{ textAlign: "center" }}>{row.stockId}</td>
                   <td>{row.stockName}</td>
                   <td style={{ textAlign: "right" }}>
-                    {/* 取引株数の表示改善 */}
                     <span
                       style={{
                         color: row.quantity > 0 ? "#28a745" : "#dc3545",
@@ -99,8 +100,10 @@ function TransactionTable({ TransactionData }: TransactionProps) {
                           Math.abs(row.quantity) > 100 ? "1.05em" : "inherit",
                       }}
                     >
-                      {row.quantity > 0 ? "+" : ""}
-                      {row.quantity.toLocaleString()}
+                      {/* {row.quantity > 0 ? "+" : ""} */}
+                      {/* {row.quantity.toLocaleString()} */}
+                      {row.quantity > 0 ? row.quantity.toLocaleString() : -(row.quantity).toLocaleString()}
+                      {row.quantity < 0 ? "株(売却)" : "株(購入)"}
                     </span>
                     <span
                       style={{
@@ -109,7 +112,7 @@ function TransactionTable({ TransactionData }: TransactionProps) {
                         color: "#6c757d",
                       }}
                     >
-                      株
+                      {/* 株 */}
                     </span>
                   </td>
                   <td style={{ textAlign: "right" }}>

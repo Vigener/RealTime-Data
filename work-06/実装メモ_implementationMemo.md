@@ -168,3 +168,10 @@ PriceManager接続 → 価格付きデータ受信 → 集計・フロントエ�
     }
   </tbody>
 ```
+
+### 改善点
+- 株価をlong型で管理する
+- 空売り許可
+- 空売り許可せず、
+  - Transaction.javaでも保有株数を管理し、StockProcessorが取引履歴を捕捉する以前に生成された取引を保存しておき、StockProcessor接続時にそれらのデータをStockProcessorに送る。（もっとも現実に近そう）
+  - もしくは、StockProcessorが接続したことをTransaction.javaにも伝え、その時点からの保有株数を管理する。→保有株数に応じて、売買数がマイナスにならないように株取引を生成する。

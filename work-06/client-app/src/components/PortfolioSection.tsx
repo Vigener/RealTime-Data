@@ -15,9 +15,15 @@ interface Props {
   shareholderIdNameMap: ShareholderIdNameMap;
   ws?: WebSocket | null;
   portfolioSummary?: PortfolioSummary | null;
+  maxHeight?: number; // **追加**: 動的なmaxHeight
 }
 
-const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolioSummary }) => {
+const PortfolioSection: React.FC<Props> = ({ 
+  shareholderIdNameMap, 
+  ws, 
+  portfolioSummary, 
+  maxHeight = 600 
+}) => {
   const map = shareholderIdNameMap ?? {};
   // 選択中のIDをローカルステートで管理
   const [selectedId, setSelectedId] = useState<number>(0);
@@ -222,16 +228,13 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
             </span>
           </h3>
 
-          {/* **修正**: ポートフォリオテーブルに固定ヘッダーを追加 */}
+          {/* **修正**: TailwindCSSクラスを使用 */}
           <div
-            style={{
-              maxHeight: `600px`,
-              overflowY: "auto",
-              border: "1px solid #dee2e6",
-              borderRadius: "0.375rem",
-              backgroundColor: "white",
-              marginBottom: "20px",
-            }}
+            className="
+              max-h-[600px] overflow-y-auto
+              xl:max-h-[1400px] xl:overflow-y-auto
+              border border-gray-300 rounded-md bg-white mb-5
+            "
           >
             <Table
               id="PortfolioTable"
@@ -254,49 +257,47 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
                   <th style={portfolioThStyle}>評価損益</th>
                 </tr>
               </thead>
-              {shouldShowPortfolio && (
-                <tbody>
-                  {portfolioSummary.stocks
-                    .filter(stock => stock.quantity > 0) // **追加**: マイナス保有を除外
-                    .map(stock => (
-                      <tr key={stock.stockId}>
-                        <td style={{ textAlign: "center" }}>{stock.stockId}</td>
-                        <td>{stock.stockName}</td>
-                        <td style={{ textAlign: "center" }}>{getRegionDisplayName(stock.region)}</td>
-                        <td style={{ textAlign: "right" }}>
-                          <span style={{ 
-                            fontWeight: stock.quantity > 100 ? "bold" : "500",
-                            color: stock.quantity > 0 ? "inherit" : "#dc3545" // マイナス保有の場合は赤色
-                          }}>
-                            {stock.quantity.toLocaleString()}
-                          </span>
-                          <span style={{ 
-                            marginLeft: "4px", 
-                            fontSize: "0.85em", 
-                            color: "#6c757d"
-                          }}>
-                            株
-                          </span>
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          {stock.averageCost.toLocaleString()}円
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          {stock.currentPrice.toLocaleString()}円
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          <span style={{ 
-                            color: stock.profit > 0 ? "#28a745" : stock.profit < 0 ? "#dc3545" : "inherit",
-                            fontWeight: Math.abs(stock.profit) > 100000 ? "bold" : "500" // 10万円以上の損益は太字
-                          }}>
-                            {stock.profit > 0 ? "+" : ""}
-                            {stock.profit.toLocaleString()}円
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              )}
+              <tbody>
+                {portfolioSummary.stocks
+                  .filter(stock => stock.quantity > 0)
+                  .map(stock => (
+                    <tr key={stock.stockId}>
+                      <td style={{ textAlign: "center" }}>{stock.stockId}</td>
+                      <td>{stock.stockName}</td>
+                      <td style={{ textAlign: "center" }}>{getRegionDisplayName(stock.region)}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <span style={{ 
+                          fontWeight: stock.quantity > 100 ? "bold" : "500",
+                          color: stock.quantity > 0 ? "inherit" : "#dc3545"
+                        }}>
+                          {stock.quantity.toLocaleString()}
+                        </span>
+                        <span style={{ 
+                          marginLeft: "4px", 
+                          fontSize: "0.85em", 
+                          color: "#6c757d"
+                        }}>
+                          株
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        {stock.averageCost.toLocaleString()}円
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        {stock.currentPrice.toLocaleString()}円
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        <span style={{ 
+                          color: stock.profit > 0 ? "#28a745" : stock.profit < 0 ? "#dc3545" : "inherit",
+                          fontWeight: Math.abs(stock.profit) > 100000 ? "bold" : "500"
+                        }}>
+                          {stock.profit > 0 ? "+" : ""}
+                          {stock.profit.toLocaleString()}円
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
             </Table>
           </div>
           
@@ -308,7 +309,6 @@ const PortfolioSection: React.FC<Props> = ({ shareholderIdNameMap, ws, portfolio
                 <Pie data={createChartData()!} options={chartOptions} />
               </div>
               
-              {/* 地域別詳細情報のテーブル */}
               <div style={{ marginTop: "15px" }}>
                 <Table size="sm" striped>
                   <thead>

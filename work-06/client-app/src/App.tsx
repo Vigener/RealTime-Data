@@ -16,91 +16,83 @@ import {
 
 function App() {
   
-  // const [checked, setChecked] = useState(false);
   const [is_trying_connect, setIsTryingConnect] = useState(false);
-  
-  // const [windowType, setWindowType] = useState<WindowType>();
-  // const [windowSize, setWindowSize] = useState<number>(0);
-  // const [slideSize, setSlideSize] = useState<number>(0);
-
   const [rawData, setRawData] = useState<string>("");
-  
-  // const [stockData, setStockData] = useState<Stock[]>([]);
-  // const [transactionData, setTransactionData] = useState<TransactionWithInfo[]>([]);
-  // const [aggregationData, setAggregationData] = useState<AggResult[]>([]);
-  // const [windowStart, setWindowStart] = useState<string>("");
-  // const [windowEnd, setWindowEnd] = useState<string>("");
   const [shareholderIdNameMap, setShareholderIdNameMap] = useState<ShareholderIdNameMap>();
-
-  // 取引履歴用
   const [transactionHistory, setTransactionHistory] = useState<TransactionHistory | null>(null);
-
-  // ポートフォリオ用
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
-
-  // 性別統計用
   const [genderStats, setGenderStats] = useState<GenderStats | null>(null);
-
-  // 年代別統計用
   const [generationStats, setGenerationStats] = useState<GenerationStats | null>(null);
 
+  // **追加**: レスポンシブ対応用の画面幅管理
+  const [windowWidth, setWindowWidth] = useState<number>(window.innerWidth);
+
   const wsRef = useRef<WebSocket | null>(null);
+
+  // **追加**: 画面幅の監視
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // **追加**: レイアウト判定とmaxHeight計算
+  const isWideScreen = windowWidth >= 1200; // 1200px以上で3列表示
+  const maxHeight = isWideScreen ? undefined : 715; // 3列表示時は制限なし、2列表示時は715px
 
   useEffect(() => {
     let connection: WebSocket | null = null;
 
     const connectWebSocket = () => {
       connection = new WebSocket("ws://localhost:3000");
-      wsRef.current = connection; // ここでrefにセット
+      wsRef.current = connection;
 
       connection.onopen = () => {
         console.log("WebSocket connected");
       };
 
       connection.onmessage = (event) => {
-        // まずJSON形式にできるか確認する。できなかったらRawDataとして
-      try {
-        const msg: ServerMessage = JSON.parse(event.data);
-        setRawData(JSON.stringify(msg, null, 2));
-        switch (msg.type) {
-          case "portfolio_summary":
-            setPortfolioSummary(msg);
-            break;
-          case "transaction_history":
-            setTransactionHistory(msg);
-            // setTransactionData(msg.transactions || []);
-            // setWindowStart(msg.windowStart || "");
-            // setWindowEnd(msg.windowEnd || "");
-            break;
-          case "ShareholderIdNameMap":
-            setShareholderIdNameMap(msg.ShareholderIdNameMap);
-            break;
-          case "gender_stats":
-            setGenderStats(msg);
-            break;
-          case "generation_stats":
-            setGenerationStats(msg);
-            break;
-          default:
-            break;
+        try {
+          const msg: ServerMessage = JSON.parse(event.data);
+          setRawData(JSON.stringify(msg, null, 2));
+          switch (msg.type) {
+            case "portfolio_summary":
+              setPortfolioSummary(msg);
+              break;
+            case "transaction_history":
+              setTransactionHistory(msg);
+              break;
+            case "ShareholderIdNameMap":
+              setShareholderIdNameMap(msg.ShareholderIdNameMap);
+              break;
+            case "gender_stats":
+              setGenderStats(msg);
+              break;
+            case "generation_stats":
+              setGenerationStats(msg);
+              break;
+            default:
+              break;
+          }
+          console.log("msg data:", msg);
+        } catch {
+          setRawData(event.data);
+          if (event.data) console.log("msg non-JSON data:", event.data);
         }
-        // setAggregationData(msg.transactions || []);
-        console.log("msg data:", msg);
-      } catch {
-        setRawData(event.data);
-        if (event.data) console.log("msg non-JSON data:", event.data);
-      }
       };
 
       connection.onerror = (error) => {
         console.error("WebSocket error:", error);
         alert("WebSocket接続に失敗しました。");
-        setIsTryingConnect(false); // 接続失敗時にフラグをリセット
+        setIsTryingConnect(false);
       };
 
       connection.onclose = () => {
         console.log("WebSocket disconnected");
-        setIsTryingConnect(false); // 接続が閉じられたときにフラグをリセット
+        setIsTryingConnect(false);
       };
     };
 
@@ -129,43 +121,111 @@ function App() {
           {is_trying_connect ? "接続中" : "接続"}
         </ToggleButton>
       </div>
-      <div style={{ display: "flex" }}>
-        <div
-          id="right-side"
-          style={{
+
+      {/* **修正**: レスポンシブ3列/2列レイアウト */}
+      <div style={{ 
+        display: "flex", 
+        flexDirection: isWideScreen ? "row" : "row",
+        gap: "16px"
+      }}>
+        {isWideScreen ? (
+          // **3列レイアウト（横幅1200px以上）**
+          <>
+            {/* 左列: 統計セクション */}
+            <div
+              id="left-stats-column"
+              style={{
+                flex: 2,
+                display: "flex",
+                flexDirection: "column",
+                gap: "20px",
+                paddingRight: "16px",
+                borderRight: "1px solid #ccc",
+              }}
+            >
+              {/* 性別統計 */}
+              <GenderStatsSection genderStats={genderStats} />
+              
+              <hr style={{ margin: "10px 0" }} />
+              
+              {/* 年代別統計 */}
+              <GenerationStatsSection generationStats={generationStats} />
+            </div>
+
+            {/* 中央列: ポートフォリオ */}
+            <div
+              id="center-portfolio-column"
+              style={{
+                flex: 3,
+                paddingRight: "16px",
+                borderRight: "1px solid #ccc",
+              }}
+            >
+              <PortfolioSection
+                shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
+                ws={wsRef.current}
+                portfolioSummary={portfolioSummary}
+                maxHeight={maxHeight}
+              />
+            </div>
+
+            {/* 右列: 取引履歴 */}
+            <div
+              id="right-transaction-column"
+              style={{
+                flex: 3,
+                paddingLeft: "16px",
+              }}
+            >
+              <TransactionHistorySection
+                transactionHistory={transactionHistory}
+                isTryingConnect={is_trying_connect}
+                setIsTryingConnect={setIsTryingConnect}
+                maxHeight={maxHeight}
+              />
+            </div>
+          </>
+        ) : (
+          // **2列レイアウト（横幅1200px未満）**
+          <>
+            {/* 左列: ポートフォリオ + 性別統計 */}
+            <div
+              id="left-side"
+              style={{
                 flex: 5,
                 borderRight: "1px solid #ccc",
                 paddingRight: "16px",
-              }}>
-          <PortfolioSection
-            shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
-            ws={wsRef.current}
-            portfolioSummary={portfolioSummary}
-          />
-          <hr />
-          {/* 性別ごとの円グラフのセクション*/}
-          <GenderStatsSection
-            genderStats={genderStats}
-          />
-          <hr />
-          <GenerationStatsSection
-            generationStats={generationStats}
-          />
-        </div>
-        <div
-          id="left-side"
-          style={{ flex: 5, paddingLeft: "16px" }}
-        >
-          <TransactionHistorySection
-            transactionHistory={transactionHistory}
-            isTryingConnect={is_trying_connect}
-            setIsTryingConnect={setIsTryingConnect}
-          />
-          {/* <hr /> */}
-          {/* 地域セクション */}
-          {/* <RegionStatsSection /> */}
-        </div>
+              }}
+            >
+              <PortfolioSection
+                shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
+                ws={wsRef.current}
+                portfolioSummary={portfolioSummary}
+                maxHeight={maxHeight}
+              />
+              <hr />
+              <GenderStatsSection genderStats={genderStats} />
+            </div>
+
+            {/* 右列: 取引履歴 + 年代別統計 */}
+            <div
+              id="right-side"
+              style={{ flex: 5, paddingLeft: "16px" }}
+            >
+              <TransactionHistorySection
+                transactionHistory={transactionHistory}
+                isTryingConnect={is_trying_connect}
+                setIsTryingConnect={setIsTryingConnect}
+                maxHeight={maxHeight}
+              />
+              <hr />
+              <GenerationStatsSection generationStats={generationStats} />
+            </div>
+          </>
+        )}
       </div>
+
+      {/* デバッグ情報（必要に応じてコメントアウト解除）
       <div id="raw-data">
         <h3>Raw Data</h3>
         <pre style={{ 
@@ -177,6 +237,7 @@ function App() {
           {rawData || "No data msg yet"}
         </pre>
       </div>
+      */}
     </div>
   );
 }

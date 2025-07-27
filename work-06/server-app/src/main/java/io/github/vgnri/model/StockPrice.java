@@ -96,11 +96,6 @@ public class StockPrice implements Serializable {
                 
                 // 株価範囲を設定（例：基準価格の±20%）
                 int basePrice = stockInfo.getBasePriceAsInt(); // StockInfoにgetBasePriceメソッドがあると仮定
-                int minPrice = (int) (basePrice * 0.8);
-                int maxPrice = (int) (basePrice * 1.2);
-                
-                StockRange range = new StockRange(minPrice, maxPrice);
-                // stockRanges.put(stockId, range);
                 
                 // 初期株価を基準価格に設定
                 StockPrice initialPrice = new StockPrice(stockId, basePrice, LocalTime.now());
@@ -152,99 +147,6 @@ public class StockPrice implements Serializable {
         void onPriceUpdate(List<StockPrice> updatedPrices);
     }
     
-    // // CSVファイルから株価データを初期化
-    // public static void initializeStockData(String csvFilePath) throws IOException {
-    //     initializeStockData(csvFilePath, Config.getCurrentStockCount());
-    // }
-    
-    // CSVファイルから株価データを初期化（行数指定版）
-    // public static void initializeStockData(String csvFilePath, int maxStockCount) throws IOException {
-    //     currentPrices.clear();
-    //     stockIdList.clear();
-        
-    //     try (BufferedReader br = new BufferedReader(new FileReader(csvFilePath))) {
-    //         String line;
-    //         boolean isFirstLine = true;
-    //         int lineNumber = 0;
-    //         int readStockCount = 0;  // 読み込んだ銘柄数をカウント
-            
-    //         while ((line = br.readLine()) != null && readStockCount < maxStockCount) {
-    //             lineNumber++;
-                
-    //             if (isFirstLine) {
-    //                 isFirstLine = false;
-    //                 continue; // ヘッダー行をスキップ
-    //             }
-                
-    //             // 空行をスキップ
-    //             if (line.trim().isEmpty()) {
-    //                 continue;
-    //             }
-                
-    //             String[] parts = line.split(",");
-    //             if (parts.length >= 4) {
-    //                 try {
-    //                     // 株IDを整数として解析
-    //                     int stockId = Integer.parseInt(parts[0].trim());
-                        
-    //                     // 空の値をチェック
-    //                     if (parts[1].trim().isEmpty() || parts[2].trim().isEmpty()) {
-    //                         System.out.println("行 " + lineNumber + " をスキップします: 空の値が含まれています");
-    //                         continue;
-    //                     }
-                        
-    //                     double min = Double.parseDouble(parts[2].trim());
-    //                     double max = Double.parseDouble(parts[3].trim());
-
-    //                      // 価格を3桁以下に制限
-    //                     min = Math.max(50.0, Math.min(min, 800.0));  // 最小50円、最大800円
-    //                     max = Math.max(min + 50.0, Math.min(max, 999.0));  // 最大999円、最小幅50円確保
-                        
-    //                     // 論理的な値をチェック
-    //                     if (min >= max) {
-    //                         System.out.println("行 " + lineNumber + " をスキップします: 最小値が最大値以上です (min=" + min + ", max=" + max + ")");
-    //                         continue;
-    //                     }
-                        
-    //                     stockIdList.add(stockId);  // 順序を保持
-                        
-    //                     // 初期価格を範囲内のランダム値で設定
-    //                     int initialPrice = (int) (min + (max - min) * random.nextDouble());
-    //                     currentPrices.put(stockId, new StockPrice(stockId, initialPrice, LocalTime.now()));
-                        
-    //                     readStockCount++;  // 正常に読み込めた場合のみカウント
-                        
-    //                 } catch (NumberFormatException e) {
-    //                     System.out.println("行 " + lineNumber + " をスキップします: 数値形式エラー - " + e.getMessage());
-    //                     continue;
-    //                 }
-    //             } else {
-    //                 System.out.println("行 " + lineNumber + " をスキップします: 列数が不足しています (必要: 4列, 実際: " + parts.length + "列)");
-    //             }
-    //         }
-            
-    //         // 株IDリストを数値順にソート
-    //         stockIdList.sort(Integer::compareTo);
-            
-
-            
-    //         System.out.println("読み込み完了: " + readStockCount + "銘柄 (要求: " + maxStockCount + "銘柄)");
-    //         if (!stockIdList.isEmpty()) {
-    //             System.out.println("ID範囲: " + stockIdList.get(0) + " - " + stockIdList.get(stockIdList.size()-1));
-    //         }
-            
-    //         // 実際に読み込んだ銘柄数を設定に反映
-    //         Config.setCurrentStockCount(でｑreadStockCount);
-    //     }
-    // }
-    
-    // // デフォルトデータで初期化（設定値を使用）
-    // public static void initializeDefaultStockData() {
-    //     initializeDefaultStockData(Config.getCurrentStockCount());
-    // }
-    
-    // 指定した数の株IDで初期化
-    // publo
     
     // 株価更新スケジューラーを開始するためのメソッド
     public static void startPriceUpdates(int intervalMs) {

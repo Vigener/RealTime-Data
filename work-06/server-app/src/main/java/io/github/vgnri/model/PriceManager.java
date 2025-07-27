@@ -285,7 +285,7 @@ public class PriceManager {
             if (stockInfo != null) {
                 // StockPriceCalculatorを使用して基準価格を計算
                 double basePrice = StockPriceCalculator.calculateBasePrice(stockInfo);
-                calculatedPrice = (int) Math.min(basePrice, 9999); // int範囲に制限
+                calculatedPrice = (int) Math.min(basePrice, Config.MAX_STOCK_PRICE); // int範囲に制限
                 
                 // 最初の10件のみ詳細表示
                 if (i <= 10) {
@@ -535,20 +535,6 @@ public class PriceManager {
     }
     
     /**
-     * 定期価格送信スケジューラーを開始（削除推奨）
-     */
-    private static void startPriceBroadcastScheduler() {
-        // この機能を廃止
-        /*
-        scheduler.scheduleAtFixedRate(() -> {
-            sendUpdatedPricesToStockProcessors();
-        }, 0, Config.PRICE_UPDATE_INTERVAL_MS, TimeUnit.MILLISECONDS);
-        */
-        
-        System.out.println("定期価格送信は廃止 - 取引ベースの価格更新のみ使用");
-    }
-    
-    /**
      * Transactionデータ受信開始
      */
     private static void startTransactionReceiver() {
@@ -670,11 +656,6 @@ public class PriceManager {
         }
     }
     
-
-    
-    /**
-     * 取引データと価格データを統合してStockProcessorに送信
-     */
     /**
      * 取引データと価格データを統合してStockProcessorに送信
      */

@@ -18,7 +18,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
-import com.google.gson.annotations.SerializedName;
 
 import io.github.vgnri.config.Config;
 import io.github.vgnri.loader.MetadataLoader;
@@ -27,19 +26,13 @@ import io.github.vgnri.model.PriceManager;
 import io.github.vgnri.model.PriceManager.TransactionData;
 import io.github.vgnri.model.ShareholderInfo;
 import io.github.vgnri.model.StockInfo;
-import io.github.vgnri.model.StockPrice;
-import io.github.vgnri.model.Transaction;
 import io.github.vgnri.server.WebsocketServer;
 import io.github.vgnri.util.LocalTimeTypeAdapter;
 
 public class StockProcessor {
-    // 最新データを格納する共有データ構造（スレッドセーフ）
-    private static final AtomicReference<List<StockPrice>> latestStockPrices = new AtomicReference<>();
-    private static final AtomicReference<List<Transaction>> latestTransactions = new AtomicReference<>();
 
-    // 統計情報用（例）
+    // 統計情報用(参考程度)
     private static final ConcurrentHashMap<Integer, Integer> stockPriceMap = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<Integer, Integer> transactionCountMap = new ConcurrentHashMap<>();
 
     // メタデータ・管理構造 ---
     // 銘柄ID -> 銘柄情報
@@ -49,7 +42,7 @@ public class StockProcessor {
     // 株主ID -> ポートフォリオ
     private static final ConcurrentHashMap<Integer, Portfolio> PortfolioManager = new ConcurrentHashMap<>();
     
-    // ウィンドウ管理用（スレッドセーフ）
+    // ウィンドウ管理用
     private static final int WINDOW_SIZE_SECONDS = 5;
     private static final int SLIDE_SIZE_SECONDS = 1;
     private static final Object windowLock = new Object();
@@ -59,141 +52,15 @@ public class StockProcessor {
     private static final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("HH:mm:ss.SS");
     private static final AtomicReference<LocalTime[]> windowRef = new AtomicReference<>(null);
 
-    // 1. グローバル変数追加
-    // private static final ConcurrentHashMap<Integer, Map<Integer, PortfolioEntry>> portfolioMap = new ConcurrentHashMap<>();
 
     // 選択中株主ID
     private static final AtomicReference<Integer> selectedShareholderId = new AtomicReference<>(null);
-
-    // 取引履歴（時系列）
-    private static final List<Transaction> TransactionHistory = java.util.Collections
-            .synchronizedList(new java.util.ArrayList<>());
 
     // WebSocketサーバーとJSONパーサーの宣言
     private static WebsocketServer wsServer;
     private static final Gson gson = new GsonBuilder()
         .registerTypeAdapter(LocalTime.class, new LocalTimeTypeAdapter())
         .create();
-
-    // 中間パース用のクラス
-    private static class StockPriceDto {
-        @SerializedName("stockId")
-        private int stockId;
-
-        @SerializedName("price")
-        private int price;
-
-        @SerializedName("timestamp")
-        private String timestamp; // String型で受け取る
-
-        // getters
-        public int getStockId() {
-            return stockId;
-        }
-
-        public int getPrice() {
-            return price;
-        }
-
-        public String getTimestamp() {
-            return timestamp;
-        }
-    }
-
-    private static class TransactionDto {
-        @SerializedName("shareholderId")
-        private int shareholderId;
-
-        @SerializedName("stockId")
-        private int stockId;
-
-        @SerializedName("quantity")
-        private int quantity;
-
-        @SerializedName("timestamp")
-        private String timestamp; // String型で受け取る
-
-        // コンストラクタを追加
-        public TransactionDto(int shareholderId, int stockId, int quantity, String timestamp) {
-            this.shareholderId = shareholderId;
-            this.stockId = stockId;
-            this.quantity = quantity;
-            this.timestamp = timestamp;
-        }
-
-        // getters
-        public int getShareholderId() {
-            return shareholderId;
-        }
-
-        public int getStockId() {
-            return stockId;
-        }
-
-        public int getQuantity() {
-            return quantity;
-        }
-
-        public String getTimestamp() {
-            return timestamp;
-        }
-    }
-
-    // 取引集計用のクラス
-    private static class TransactionSummary implements Serializable {
-        private int totalQuantity = 0;
-        private int transactionCount = 0;
-        private double averageQuantity = 0.0;
-        private int maxQuantity = Integer.MIN_VALUE;
-        private int minQuantity = Integer.MAX_VALUE;
-        private List<LocalTime> timestamps = new ArrayList<>();
-
-        public void addTransaction(Transaction transaction) {
-            int quantity = transaction.getQuantity();
-            totalQuantity += quantity;
-            transactionCount++;
-            timestamps.add(transaction.getTimestamp());
-
-            maxQuantity = Math.max(maxQuantity, quantity);
-            minQuantity = Math.min(minQuantity, quantity);
-            averageQuantity = (double) totalQuantity / transactionCount;
-        }
-
-        public void merge(TransactionSummary other) {
-            this.totalQuantity += other.totalQuantity;
-            this.transactionCount += other.transactionCount;
-            this.timestamps.addAll(other.timestamps);
-
-            this.maxQuantity = Math.max(this.maxQuantity, other.maxQuantity);
-            this.minQuantity = Math.min(this.minQuantity, other.minQuantity);
-            this.averageQuantity = (double) this.totalQuantity / this.transactionCount;
-        }
-
-        // Getters for JSON serialization
-        public int getTotalQuantity() {
-            return totalQuantity;
-        }
-
-        public int getTransactionCount() {
-            return transactionCount;
-        }
-
-        public double getAverageQuantity() {
-            return averageQuantity;
-        }
-
-        public int getMaxQuantity() {
-            return maxQuantity == Integer.MIN_VALUE ? 0 : maxQuantity;
-        }
-
-        public int getMinQuantity() {
-            return minQuantity == Integer.MAX_VALUE ? 0 : minQuantity;
-        }
-
-        public int getTimestampCount() {
-            return timestamps.size();
-        }
-    }
 
     // タイムスタンプ変換メソッド
     private static LocalTime parseTimestamp(String timestampStr) {
@@ -367,23 +234,7 @@ public class StockProcessor {
                                                      txWithPrice.getTransaction().getStockId() + 
                                                      ", 価格=" + txWithPrice.getCurrentPrice());
                                     
-                                    processTransactionWithGuaranteedPrice(txWithPrice);
-                                    
-                                } else if (line.contains("\"updatedPrices\"")) {
-                                    // 価格更新データ（初期データまたは定期更新）
-                                    PriceManager.PriceUpdateData priceUpdate = 
-                                        gson.fromJson(line, PriceManager.PriceUpdateData.class);
-                                    
-                                    boolean isInitialData = priceUpdate.getUpdatedPrices().size() > 50; // 50銘柄以上なら初期データと判定
-                                    
-                                    if (isInitialData) {
-                                        System.out.println("← 初期価格データ受信: " + priceUpdate.getUpdatedPrices().size() + "銘柄");
-                                    } else {
-                                        System.out.println("← 価格更新受信: " + priceUpdate.getUpdatedPrices().size() + "銘柄");
-                                    }
-                                    
-                                    processPriceUpdate(priceUpdate.getUpdatedPrices());
-                                    
+                                    processTransactionWithGuaranteedPrice(txWithPrice);    
                                 } else {
                                     System.out.println("← 不明なデータ形式: " + line.substring(0, Math.min(100, line.length())));
                                 }
@@ -491,23 +342,10 @@ public class StockProcessor {
         shutdown();
     }
 
-    // 価格更新処理メソッドを追加
-    private static void processPriceUpdate(List<StockPrice> updatedPrices) {
-        // この処理は初期データ受信時のみ使用し、リアルタイム更新では使用しない
-        System.out.println("価格更新受信: " + updatedPrices.size() + "銘柄 (初期データまたは参考情報)");
-        
-        // 参考情報として保存するが、取引処理には影響させない
-        for (StockPrice price : updatedPrices) {
-            // stockPriceMap.put(price.getStockId(), price.getPrice()); // コメントアウト
-        }
-    }
-
     // 価格保証済み取引処理
     private static void processTransactionWithGuaranteedPrice(PriceManager.TransactionWithPrice txWithPrice) {
         TransactionData transaction = txWithPrice.getTransaction();
         int guaranteedPrice = txWithPrice.getCurrentPrice();
-        
-        // **重要**: 保証価格を使用し、stockPriceMapは参考程度に留める
     
         // 追加情報の取得
         String shareholderName = "";
@@ -574,20 +412,18 @@ public class StockProcessor {
     // ポートフォリオ更新メソッドを修正
     private static void updatePortfolio(int shareholderId, int stockId, String stockName, 
                                        int quantity, int acquisitionPrice) {
-        // PortfolioManager.computeIfAbsent(shareholderId, k -> new Portfolio(shareholderId))
-        //                .addTransaction(stockId, stockName, quantity, price);
         Portfolio portfolio = PortfolioManager.computeIfAbsent(shareholderId, k -> new Portfolio(shareholderId));
 
         // デバック用: 更新前の株数を記録
-        Portfolio.Entry existingEntry = portfolio.getHoldings().get(stockId);
-        int beforeQuantity = (existingEntry != null) ? existingEntry.getTotalQuantity() : 0;
+        // Portfolio.Entry existingEntry = portfolio.getHoldings().get(stockId);
+        // int beforeQuantity = (existingEntry != null) ? existingEntry.getTotalQuantity() : 0;
 
         // ポートフォリオ更新
         portfolio.addTransaction(stockId, stockName, quantity, acquisitionPrice);
 
         // デバッグ: 更新後の株数を表示
-        Portfolio.Entry updatedEntry = portfolio.getHoldings().get(stockId);
-        int afterQuantity = (updatedEntry != null) ? updatedEntry.getTotalQuantity() : 0;
+        // Portfolio.Entry updatedEntry = portfolio.getHoldings().get(stockId);
+        // int afterQuantity = (updatedEntry != null) ? updatedEntry.getTotalQuantity() : 0;
         // System.out.println("ポートフォリオ更新: 株主ID=" + shareholderId + 
         //                    " 銘柄ID=" + stockId +
         //                    " 取引数量=" + quantity + 
@@ -627,7 +463,6 @@ public class StockProcessor {
         }
 
         // transactionBufferの先頭部分を表示
-        int displayCount = Math.min(3, bufferCopy.size());
         LocalTime[] windowTimes = windowRef.get();
         String windowStartStr = (windowTimes != null) ? dtf.format(windowTimes[0]) : "";
         String windowEndStr = (windowTimes != null) ? dtf.format(windowTimes[1]) : "";
@@ -904,39 +739,6 @@ public class StockProcessor {
         }
     }
 
-
-    // 集計・WebSocket送信メソッド(取引履歴送信部分)
-    private static void aggregateAndSend() {
-        ArrayList<Map<String, Object>> bufferCopy;
-        synchronized (bufferLock) {
-            bufferCopy = new ArrayList<>(transactionBuffer);
-        }
-        if (bufferCopy.isEmpty())
-            return;
-
-        // 結果をJSON化してWebSocket送信
-        LocalTime[] window = windowRef.get();
-        Map<String, Object> result = new HashMap<>();
-        result.put("type", "transaction_history");
-        result.put("windowStart", (window != null) ? window[0].toString() : "");
-        result.put("windowEnd", (window != null) ? window[1].toString() : "");
-        result.put("transactions", bufferCopy);
-        sendToWebClients(gson.toJson(result));
-
-        // 選択中株主のポートフォリオ更新・送信
-        Integer selectedId = selectedShareholderId.get();
-        // System.out.println("selectedId"+selectedId);
-        if (selectedId != null) {
-            System.out.println("選択中株主ID: " + selectedId);
-            String portfolioJson = getPortfolioSummaryJson(selectedId);
-            if (portfolioJson != null) {
-                System.out.println("ポートフォリオ送信: 株主ID=" + selectedId + " JSON=" + (portfolioJson.length() > 200 ? portfolioJson.substring(0, 200) + "..." : portfolioJson));
-                sendToWebClients(portfolioJson);
-            }
-        }
-    }
-
-
     // 集計結果をWebSocket経由で送信するためのメソッド
     private static void sendToWebClients(String json) {
         if (wsServer == null || json == null || json.isEmpty()) {
@@ -984,15 +786,12 @@ public class StockProcessor {
             emptyResult.put("totalProfit", 0);
             emptyResult.put("profitRate", 0.0);
             emptyResult.put("stocks", new ArrayList<>());
-            emptyResult.put("regionSummary", createEmptyRegionSummary());
             return gson.toJson(emptyResult);
         }
 
         // **修正**: AtomicIntegerまたは配列を使用してlambda内で値を変更可能にする
         final int[] totals = new int[3]; // [totalAsset, totalCost, totalProfit]
         
-        // 地域別集計用
-        Map<String, RegionSummary> regionMap = new HashMap<>();
         List<Map<String, Object>> stockList = new ArrayList<>();
         
         // **修正**: 株ID順でソートしてから処理
@@ -1031,10 +830,6 @@ public class StockProcessor {
                 totals[0] += asset;  // totalAsset
                 totals[1] += cost;   // totalCost
                 totals[2] += profit; // totalProfit
-                
-                // 地域別集計
-                RegionSummary regionSummary = regionMap.computeIfAbsent(region, k -> new RegionSummary());
-                regionSummary.addStock(asset, cost, profit);
             });
 
         // **修正**: 配列から値を取得
@@ -1051,59 +846,8 @@ public class StockProcessor {
         result.put("totalProfit", totalProfit);
         result.put("profitRate", profitRate);
         result.put("stocks", stockList); // 既にstockId順でソート済み
-        result.put("regionSummary", createRegionSummaryMap(regionMap, totalAsset));
 
         return gson.toJson(result);
-    }
-
-    // 地域別サマリー作成
-    private static Map<String, Object> createRegionSummaryMap(Map<String, RegionSummary> regionMap, int totalAsset) {
-        Map<String, Object> regionSummary = new HashMap<>();
-        
-        for (Map.Entry<String, RegionSummary> entry : regionMap.entrySet()) {
-            String region = entry.getKey();
-            RegionSummary summary = entry.getValue();
-            
-            Map<String, Object> regionData = new HashMap<>();
-            regionData.put("asset", summary.totalAsset);
-            regionData.put("profit", summary.totalProfit);
-            regionData.put("profitRate", summary.totalCost > 0 ? (double) summary.totalProfit / summary.totalCost : 0.0);
-            regionData.put("assetRatio", totalAsset > 0 ? (double) summary.totalAsset / totalAsset : 0.0);
-            
-            regionSummary.put(region, regionData);
-        }
-        
-        return regionSummary;
-    }
-
-    private static Map<String, Object> createEmptyRegionSummary() {
-        Map<String, Object> regionSummary = new HashMap<>();
-        regionSummary.put("Japan", createEmptyRegionData());
-        regionSummary.put("US", createEmptyRegionData());
-        regionSummary.put("Europe", createEmptyRegionData());
-        return regionSummary;
-    }
-
-    private static Map<String, Object> createEmptyRegionData() {
-        Map<String, Object> regionData = new HashMap<>();
-        regionData.put("asset", 0);
-        regionData.put("profit", 0);
-        regionData.put("profitRate", 0.0);
-        regionData.put("assetRatio", 0.0);
-        return regionData;
-    }
-
-    // 地域別集計クラス
-    private static class RegionSummary {
-        int totalAsset = 0;
-        int totalCost = 0;
-        int totalProfit = 0;
-        
-        void addStock(int asset, int cost, int profit) {
-            this.totalAsset += asset;
-            this.totalCost += cost;
-            this.totalProfit += profit;
-        }
     }
 
 }

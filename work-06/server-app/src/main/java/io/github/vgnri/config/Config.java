@@ -45,6 +45,8 @@ public class Config {
     // public static final int SLIDING_WINDOW_STEP_MS = 100; // スライディングウィンドウのステップ
     public static final int SLIDING_WINDOW_STEP_MS = 500; // スライディングウィンドウのステップ(500ms = 0.5秒)
 
+    public static final int MAX_STOCK_PRICE = 99999; // 株価の最大値
+
 
 
     // CSVファイルパス - 動的に解決
