@@ -4,6 +4,37 @@ theme: default
 paginate: true
 header: '課題6 - リアルタイム株式取引分析システム'
 footer: '主専攻実験 最終課題 情報科学類3年 2023109790 五十嵐尊人'
+style: |
+    :root {
+        --fw: 1;
+        }
+    /* ----- レイアウト ----- */
+    .flex {
+        display: flex;
+        gap: 1em;
+    }
+    .sa {
+        justify-content: space-around;
+        /* border: 8px dashed rgb(15, 166, 226);
+        background-color: rgb(222, 244, 255); */
+    }
+    .sb {
+        justify-content: space-between;
+        /* border: 8px dashed rgb(21, 17, 255);
+        background-color: rgb(222, 244, 255); */
+    }
+    .sa div,
+    .sb div {
+        margin: 0.1em;
+        /* border: 8px dashed rgb(80, 177, 109);
+        background-color: rgb(227, 250, 237); */
+    }
+    .fw div {
+        flex: var(--fw);
+        /* background-color: rgb(244, 238, 255);
+        border: 8px dashed rgb(93, 0, 255); */
+    } 
+    /* ---------- */
 ---
 
 # 課題6 - リアルタイム株式取引分析システム
@@ -166,7 +197,7 @@ PriceManagerによる一元管理で解決しました。
 [統計情報] | [ポートフォリオ] | [取引履歴]
 ```
 
-![fit bg right: 80% vertical drop-shadow:0,5px,10px,rgba(0,0,0,.4)](image-1.png)
+![fit bg right: 70% vertical drop-shadow:0,5px,10px,rgba(0,0,0,.4)](image-1.png)
 ![fit bg right vertical drop-shadow:0,5px,10px,rgba(0,0,0,.4)](image-3.png)
 
 
@@ -176,28 +207,59 @@ PC画面では統計情報、ポートフォリオ、取引履歴を3列で同�
 タブレットやスマートフォンでは2列表示に最適化しています。
 TailwindCSSのブレークポイント機能を活用して実装しています。
 -->
+---
+
+# 工夫した点 1: 取引に応じた価格変動 💰
+
 
 ---
 
-# 工夫した点 1: 現実的な取引生成 💡
+# 工夫した点 2: 現実的な取引生成(未完成) 💡
+
+<div class="flex fw">
+<div style="--fw: 3;">
 
 ## スマートな売買量決定
+
+<!-- <div style="text-align:center;">
+    <img src="image-4.png" alt="現実的な取引生成のイメージ" style="max-width:80%; box-shadow:0 5px 10px rgba(0,0,0,.4); border-radius:8px;" />
+</div> -->
 
 ```java
 if (保有株数 == 0) {
     買いのみ生成
+} else if (保有株数 <= 10) {
+    買い優勢（積み立て傾向）
 } else if (保有株数 <= 50) {
-    バランス売買
-} else {
+    バランス良く売買
+} else if (保有株数 <= 100) {
+    売り優勢（利確傾向）
+} else { // 大量保有
     利確傾向（売り優先）
 }
 ```
 
+</div>
+
+<div style="--fw: 3;">
+
+## 将来的拡張性
+
+### 株主ごとに、投資傾向を設定する
+
+- **長期保有傾向の株主**
+  - （買い優勢、同じ株を定期購入傾向）
+- **短期トレード傾向の株主**
+  - （売買回数多め、利確傾向）
+
+</div>
+</div>
 <!-- 
 現実的な取引を再現するため、投資家の保有状況に応じた売買ロジックを実装しました。
 保有していない銘柄は買いのみ、少量保有では買いと売りをバランスよく、
 大量保有では利確傾向で売りを優先するなど、実際の投資行動に近づけています。
 -->
+
 
 ---
 
@@ -229,7 +291,8 @@ if (保有株数 == 0) {
 - **リアルタイム更新**: スムーズなアニメーション
 
 （ここに図を挿入、図は円グラフと棒グラフの例を視覚的に表す）
-
+![fit bg right:30% vertical](image-5.png)
+![fit bg right:30%](image-6.png)
 <!-- 
 データの可視化にも力を入れました。Chart.jsを使用して、
 地域別の資産配分を円グラフ、性別・年代別の統計を棒グラフで表示しています。
@@ -247,7 +310,7 @@ if (保有株数 == 0) {
 - **StockProcessor**: 途中接続でデータ不整合
 - **結果**: マイナス保有株数の発生
 
-## 応急対応
+## 応急対応(フロントエンド側)
 
 ```typescript
 {portfolioSummary.stocks
@@ -268,17 +331,31 @@ StockProcessorが途中から接続するため、データの不整合が発生
 
 # 苦労した点 2: マイクロサービス間通信 🌐
 
+<div class="flex fw">
+
+
+<div>
+
 ## 複雑な通信フロー
 
 ```
 Transaction ↔ PriceManager ↔ StockProcessor
 ```
 
+`Transaction`に対して「`StockProcessor`の接続状態」を`PriceManager`を通じて伝える2箇所の双向通信が必要で、この実装が間に合わなかった。
+
+</div>
+
+<div>
+
 ## 課題
 
 - **双方向通信**の設計複雑性
 - **接続状態の伝播**
 - **エラーハンドリング**
+
+</div>
+</div>
 
 <!-- 
 3つのサービス間での複雑な通信設計も大きな課題でした。
