@@ -18,8 +18,8 @@ public class StockPriceCalculator {
         double marketCapMultiplier = getMarketCapMultiplier(companyType);
         long estimatedMarketCap = (long)(capitalStock * marketCapMultiplier);
         
-        // 発行済み株式数を資本金から推定（1株あたり500円と仮定）
-        long estimatedShares = capitalStock / 500;
+        // 発行済み株式数を資本金から推定（1株あたり50000円と仮定）
+        long estimatedShares = capitalStock / 50000;
         double priceFromMarketCap = (double)estimatedMarketCap / estimatedShares;
         
         // 3. 両方の価格を重み付き平均
