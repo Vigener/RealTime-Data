@@ -69,7 +69,7 @@ const GenerationStatsSection: React.FC<GenerationStatsSectionProps> = ({ generat
     });
   }
 
-  // 円グラフ用データの作成（総投資額ベース）
+  // 円グラフ用データの作成（平均投資額ベース）
   const createChartData = () => {
     if (!generationStats) {
       return createPlaceholderData();
@@ -78,22 +78,29 @@ const GenerationStatsSection: React.FC<GenerationStatsSectionProps> = ({ generat
     try {
       const generations = Object.keys(safeGenerationStats);
       
-      // 総投資額が0より大きい年代のみフィルタリング
+      // 投資人数が0より大きい年代のみフィルタリング
       const filteredGenerations = generations.filter(gen => 
-        safeGenerationStats[gen]?.totalCost > 0
+        safeGenerationStats[gen]?.investorCount > 0
       );
 
       if (filteredGenerations.length === 0) {
         return createPlaceholderData();
       }
 
-      const data = filteredGenerations.map(gen => safeGenerationStats[gen].totalCost);
-      const totalCost = data.reduce((sum, cost) => sum + cost, 0);
+      // 平均投資額を計算
+      const averageInvestmentData = filteredGenerations.map(gen => {
+        const genData = safeGenerationStats[gen];
+        return genData.investorCount > 0 ? genData.totalCost / genData.investorCount : 0;
+      });
+
+      const totalAverageInvestment = averageInvestmentData.reduce((sum, avg) => sum + avg, 0);
       
-      const labels = filteredGenerations.map(gen => {
+      const labels = filteredGenerations.map((gen, index) => {
         const genData = safeGenerationStats[gen];
         const displayName = getGenerationDisplayName(gen);
-        const percentage = totalCost > 0 ? ((genData.totalCost / totalCost) * 100).toFixed(1) : '0.0';
+        const averageInvestment = averageInvestmentData[index];
+        const percentage = totalAverageInvestment > 0 ? 
+          ((averageInvestment / totalAverageInvestment) * 100).toFixed(1) : '0.0';
         return `${displayName} (${percentage}%)`;
       });
 
@@ -107,7 +114,7 @@ const GenerationStatsSection: React.FC<GenerationStatsSectionProps> = ({ generat
         labels,
         datasets: [
           {
-            data,
+            data: averageInvestmentData,
             backgroundColor: colors.slice(0, filteredGenerations.length),
             borderColor: colors.slice(0, filteredGenerations.length),
             borderWidth: 1,
@@ -140,7 +147,7 @@ const GenerationStatsSection: React.FC<GenerationStatsSectionProps> = ({ generat
 
             try {
               const generationKeys = Object.keys(safeGenerationStats).filter(gen => 
-                safeGenerationStats[gen]?.totalCost > 0
+                safeGenerationStats[gen]?.investorCount > 0
               );
               const generation = generationKeys[context.dataIndex];
               const genData = safeGenerationStats[generation];
@@ -149,10 +156,14 @@ const GenerationStatsSection: React.FC<GenerationStatsSectionProps> = ({ generat
                 return context.label || 'データエラー';
               }
               
+              const averageInvestment = genData.investorCount > 0 ? 
+                genData.totalCost / genData.investorCount : 0;
+              
               return [
-                `総投資額: ${genData.totalCost.toLocaleString()}円`,
+                `平均投資額: ${averageInvestment.toLocaleString()}円`,
                 `投資人数: ${genData.investorCount.toLocaleString()}人`,
-                `評価損益: ${genData.totalProfit > 0 ? '+' : ''}${genData.totalProfit.toLocaleString()}円`,
+                `総投資額: ${genData.totalCost.toLocaleString()}円`,
+                `平均損益: ${genData.averageProfit > 0 ? '+' : ''}${genData.averageProfit.toLocaleString()}円`,
               ];
             } catch (error) {
               console.error('Error in tooltip callback:', error);
@@ -172,7 +183,7 @@ const GenerationStatsSection: React.FC<GenerationStatsSectionProps> = ({ generat
       
       {/* 円グラフ */}
       <div style={{ marginBottom: "20px" }}>
-        <h4>総投資額分布</h4>
+        <h4>平均投資額分布</h4>
         <div style={{ width: "350px", height: "300px", margin: "0 auto" }}>
           <Pie data={chartData} options={chartOptions} />
         </div>
