@@ -786,6 +786,7 @@ public class StockProcessor {
             emptyResult.put("totalProfit", 0);
             emptyResult.put("profitRate", 0.0);
             emptyResult.put("stocks", new ArrayList<>());
+            emptyResult.put("regionSummary", createEmptyRegionSummary());
             return gson.toJson(emptyResult);
         }
 
@@ -793,6 +794,9 @@ public class StockProcessor {
         final int[] totals = new int[3]; // [totalAsset, totalCost, totalProfit]
         
         List<Map<String, Object>> stockList = new ArrayList<>();
+
+        // 地域別集計用
+        Map<String, RegionSummary> regionMap = new HashMap<>();
         
         // **修正**: 株ID順でソートしてから処理
         portfolio.getHoldings().entrySet().stream()
@@ -830,12 +834,16 @@ public class StockProcessor {
                 totals[0] += asset;  // totalAsset
                 totals[1] += cost;   // totalCost
                 totals[2] += profit; // totalProfit
+                
+                RegionSummary regionSummary = regionMap.computeIfAbsent(region, k -> new RegionSummary());
+                regionSummary.addStock(asset, cost, profit);
             });
 
         // **修正**: 配列から値を取得
         int totalAsset = totals[0];
         int totalCost = totals[1];
         int totalProfit = totals[2];
+
         
         double profitRate = totalCost > 0 ? (double) totalProfit / totalCost : 0.0;
 
@@ -846,8 +854,58 @@ public class StockProcessor {
         result.put("totalProfit", totalProfit);
         result.put("profitRate", profitRate);
         result.put("stocks", stockList); // 既にstockId順でソート済み
+        result.put("regionSummary", createRegionSummaryMap(regionMap, totalAsset));
 
         return gson.toJson(result);
     }
 
+    // 地域別サマリー作成
+    private static Map<String, Object> createRegionSummaryMap(Map<String, RegionSummary> regionMap, int totalAsset) {
+        Map<String, Object> regionSummary = new HashMap<>();
+        
+        for (Map.Entry<String, RegionSummary> entry : regionMap.entrySet()) {
+            String region = entry.getKey();
+            RegionSummary summary = entry.getValue();
+            
+            Map<String, Object> regionData = new HashMap<>();
+            regionData.put("asset", summary.totalAsset);
+            regionData.put("profit", summary.totalProfit);
+            regionData.put("profitRate", summary.totalCost > 0 ? (double) summary.totalProfit / summary.totalCost : 0.0);
+            regionData.put("assetRatio", totalAsset > 0 ? (double) summary.totalAsset / totalAsset : 0.0);
+            
+            regionSummary.put(region, regionData);
+        }
+        
+        return regionSummary;
+    }
+
+    private static Map<String, Object> createEmptyRegionSummary() {
+        Map<String, Object> regionSummary = new HashMap<>();
+        regionSummary.put("Japan", createEmptyRegionData());
+        regionSummary.put("US", createEmptyRegionData());
+        regionSummary.put("Europe", createEmptyRegionData());
+        return regionSummary;
+    }
+
+    private static Map<String, Object> createEmptyRegionData() {
+        Map<String, Object> regionData = new HashMap<>();
+        regionData.put("asset", 0);
+        regionData.put("profit", 0);
+        regionData.put("profitRate", 0.0);
+        regionData.put("assetRatio", 0.0);
+        return regionData;
+    }
+
+    // 地域別集計クラス
+    private static class RegionSummary {
+        int totalAsset = 0;
+        int totalCost = 0;
+        int totalProfit = 0;
+        
+        void addStock(int asset, int cost, int profit) {
+            this.totalAsset += asset;
+            this.totalCost += cost;
+            this.totalProfit += profit;
+        }
+    }
 }

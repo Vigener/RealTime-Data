@@ -132,7 +132,7 @@ Transaction.java ➡️ PriceManager.java ➡️ StockProcessor.java
 ## フロントエンド
 
 - **Vite + React + TypeScript**: UI フレームワーク
-- [**Chart.js**](https://react-chartjs-2.js.org/): グラフ可視化
+- [**Chart.js**(react-chartjs-2)](https://react-chartjs-2.js.org/): グラフ可視化
 - [**TailwindCSS**](https://tailwindcss.com/): レスポンシブ対応
 - [**React Bootstrap**](https://react-bootstrap.netlify.app/): UIコンポーネント
 

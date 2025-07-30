@@ -232,7 +232,7 @@ const PortfolioSection: React.FC<Props> = ({
           <div
             className="
               max-h-[600px] overflow-y-auto
-              xl:max-h-[1400px] xl:overflow-y-auto
+              xl:max-h-[850px] xl:overflow-y-auto
               border border-gray-300 rounded-md bg-white mb-5
             "
           >
