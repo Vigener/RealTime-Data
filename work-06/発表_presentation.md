@@ -511,6 +511,7 @@ Transaction ↔ PriceManager ↔ StockProcessor
 ## 学んだこと
 
 - **WebSocket**を使ったリアルタイム通信
+- **スライディングウィンドウ**の実装
 - **React**での動的データ可視化
 - **分散システム**の設計課題
 
