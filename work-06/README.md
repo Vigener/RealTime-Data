@@ -81,20 +81,31 @@ work-06/
 │   │   │   ├── PriceManager.java       # 株価管理サービス
 │   │   │   ├── Portfolio.java          # ポートフォリオ管理
 │   │   │   ├── StockInfo.java          # 銘柄情報
+│   │   │   ├── StockMetadata.java      # 銘柄メタデータ型定義クラス
+│   │   │   ├── StockPrice.java         # 株価型定義クラス
+│   │   │   ├── StockPriceCalculator.java   # 株価決定計算クラス
 │   │   │   └── ShareholderInfo.java    # 投資家情報
 │   │   ├── server/
 │   │   │   └── WebsocketServer.java    # WebSocket通信
+│   │   ├── util/
+│   │   │   ├── LocalTimeTypeAdapter.java # Gson用
 │   │   └── loader/
 │   │       └── MetadataLoader.java     # CSVデータ読み込み
 │   └── src/main/resources/             # 設定・データファイル
+│       ├── initial_price_data.csv
+│       ├── shareholder_metadata.csv
+│       ├── stock_metadata.csv
+│       ├── stock_price_data.csv
+│       └── tsukuba_metadata.csv
 └── client-app/                # React フロントエンド
     ├── src/
     │   ├── App.tsx                     # メインアプリケーション
     │   ├── components/
-    │   │   ├── PortfolioSection.tsx    # ポートフォリオ表示
+    │   │   ├── PortfolioSection.tsx    # ポートフォリオ表示セクション
+    │   │   ├── TransactionHistorySection.tsx   # 取引履歴表示セクション
     │   │   ├── TransactionTable.tsx    # 取引履歴テーブル
-    │   │   ├── GenderStatsSection.tsx  # 性別統計
-    │   │   └── GenerationStatsSection.tsx # 年代別統計
+    │   │   ├── GenderStatsSection.tsx  # 性別統計セクション
+    │   │   └── GenerationStatsSection.tsx # 年代別統計セクション
     │   └── DataType.tsx               # TypeScript型定義
     ├── package.json
     └── vite.config.ts
