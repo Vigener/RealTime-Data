@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Col, Container, Row } from "react-bootstrap";
 import ToggleButton from "react-bootstrap/esm/ToggleButton";
 import "./App.css";
 import GenderStatsSection from "./components/GenderStatsSection";
@@ -24,12 +25,12 @@ function App() {
   const [genderStats, setGenderStats] = useState<GenderStats | null>(null);
   const [generationStats, setGenerationStats] = useState<GenerationStats | null>(null);
 
-  // **追加**: レスポンシブ対応用の画面幅管理
-  const [windowWidth, setWindowWidth] = useState<number>(window.innerWidth);
+  // ウィンドウサイズ管理
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
   const wsRef = useRef<WebSocket | null>(null);
 
-  // **追加**: 画面幅の監視
+  // ウィンドウサイズ監視
   useEffect(() => {
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
@@ -39,10 +40,7 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // **追加**: レイアウト判定とmaxHeight計算
-  const isWideScreen = windowWidth >= 1200; // 1200px以上で3列表示
-  const maxHeight = isWideScreen ? undefined : 715; // 3列表示時は制限なし、2列表示時は715px
-
+  // WebSocket接続処理
   useEffect(() => {
     let connection: WebSocket | null = null;
 
@@ -106,6 +104,16 @@ function App() {
     };
   }, [is_trying_connect]);
 
+  // ブレークポイント定義
+  const MOBILE_BREAKPOINT = 768;  // md未満: 1列表示
+  const TABLET_BREAKPOINT = 992;  // lg未満: 2列表示  
+
+
+  // レイアウト判定
+  const isMobile = windowWidth < MOBILE_BREAKPOINT;
+  const isTablet = windowWidth >= MOBILE_BREAKPOINT && windowWidth < TABLET_BREAKPOINT;
+
+
   return (
     <div className="App">
       <h1 id="title">課題 6</h1>
@@ -122,122 +130,76 @@ function App() {
         </ToggleButton>
       </div>
 
-      {/* **修正**: レスポンシブ3列/2列レイアウト */}
-      <div style={{ 
-        display: "flex", 
-        flexDirection: isWideScreen ? "row" : "row",
-        gap: "16px"
-      }}>
-        {isWideScreen ? (
-          // **3列レイアウト（横幅1200px以上）**
-          <>
-            {/* 左列: 統計セクション */}
-            <div
-              id="left-stats-column"
-              style={{
-                flex: 2,
-                display: "flex",
-                flexDirection: "column",
-                gap: "20px",
-                paddingRight: "16px",
-                borderRight: "1px solid #ccc",
-              }}
-            >
-              {/* 性別統計 */}
-              <GenderStatsSection genderStats={genderStats} />
-              
-              <hr style={{ margin: "10px 0" }} />
-              
-              {/* 年代別統計 */}
-              <GenerationStatsSection generationStats={generationStats} />
-            </div>
-
-            {/* 中央列: ポートフォリオ */}
-            <div
-              id="center-portfolio-column"
-              style={{
-                flex: 3,
-                paddingRight: "16px",
-                borderRight: "1px solid #ccc",
-              }}
-            >
-              <PortfolioSection
-                shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
-                ws={wsRef.current}
-                portfolioSummary={portfolioSummary}
-                maxHeight={maxHeight}
-              />
-            </div>
-
-            {/* 右列: 取引履歴 */}
-            <div
-              id="right-transaction-column"
-              style={{
-                flex: 3,
-                paddingLeft: "16px",
-              }}
-            >
-              <TransactionHistorySection
-                transactionHistory={transactionHistory}
-                isTryingConnect={is_trying_connect}
-                setIsTryingConnect={setIsTryingConnect}
-                maxHeight={maxHeight}
-              />
-            </div>
-          </>
+      <Container fluid className="p-3">
+        {isMobile ? (
+          // モバイル: 1列表示
+          <div className="d-flex flex-column gap-3">
+            <PortfolioSection
+              shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
+              ws={wsRef.current}
+              portfolioSummary={portfolioSummary}
+            />
+            <TransactionHistorySection
+              transactionHistory={transactionHistory}
+              isTryingConnect={is_trying_connect}
+              setIsTryingConnect={setIsTryingConnect}
+            />
+            <GenderStatsSection genderStats={genderStats} />
+            <GenerationStatsSection generationStats={generationStats} />
+          </div>
+        ) : isTablet ? (
+          // タブレット: 2列表示
+          <Row>
+            <Col md={6} className="mb-4">
+              <div className="d-flex flex-column gap-3">
+                <PortfolioSection
+                  shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
+                  ws={wsRef.current}
+                  portfolioSummary={portfolioSummary}
+                />
+                <GenderStatsSection genderStats={genderStats} />
+              </div>
+            </Col>
+            <Col md={6} className="mb-4">
+              <div className="d-flex flex-column gap-3">
+                <TransactionHistorySection
+                  transactionHistory={transactionHistory}
+                  isTryingConnect={is_trying_connect}
+                  setIsTryingConnect={setIsTryingConnect}
+                />
+                <GenerationStatsSection generationStats={generationStats} />
+              </div>
+            </Col>
+          </Row>
         ) : (
-          // **2列レイアウト（横幅1200px未満）**
-          <>
-            {/* 左列: ポートフォリオ + 性別統計 */}
-            <div
-              id="left-side"
-              style={{
-                flex: 5,
-                borderRight: "1px solid #ccc",
-                paddingRight: "16px",
-              }}
-            >
-              <PortfolioSection
-                shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
-                ws={wsRef.current}
-                portfolioSummary={portfolioSummary}
-                maxHeight={maxHeight}
-              />
-              <hr />
-              <GenderStatsSection genderStats={genderStats} />
-            </div>
-
-            {/* 右列: 取引履歴 + 年代別統計 */}
-            <div
-              id="right-side"
-              style={{ flex: 5, paddingLeft: "16px" }}
-            >
+          // デスクトップ: 3列表示
+          <Row>
+            <Col lg={4} className="mb-4">
+              <div className="d-flex flex-column gap-3">
+                <GenderStatsSection genderStats={genderStats} />
+                <GenerationStatsSection generationStats={generationStats} />
+              </div>
+            </Col>
+            <Col lg={4} className="mb-4">
+              <div className="d-flex flex-column gap-3">
+                <PortfolioSection
+                  shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
+                  ws={wsRef.current}
+                  portfolioSummary={portfolioSummary}
+                />
+              </div>
+            </Col>
+            <Col lg={4} className="mb-4">
               <TransactionHistorySection
                 transactionHistory={transactionHistory}
                 isTryingConnect={is_trying_connect}
                 setIsTryingConnect={setIsTryingConnect}
-                maxHeight={maxHeight}
               />
-              <hr />
-              <GenerationStatsSection generationStats={generationStats} />
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* デバッグ情報（必要に応じてコメントアウト解除）
-      <div id="raw-data">
-        <h3>Raw Data</h3>
-        <pre style={{ 
-          backgroundColor: "#f5f5f5", 
-          padding: "10px", 
-          borderRadius: "4px",
-          overflow: "auto"
-        }}>
-          {rawData || "No data msg yet"}
-        </pre>
-      </div>
-      */}
+            </Col>
+          </Row>
+        )
+        }
+      </Container>
     </div>
   );
 }

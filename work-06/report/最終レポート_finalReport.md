@@ -51,7 +51,6 @@ message pack
     - [4.1.1 Transaction.java - 取引生成エンジン](#411-transactionjava---取引生成エンジン)
       - [取引生成ロジック](#取引生成ロジック)
       - [売買数量決定ロジック](#売買数量決定ロジック)
-      - [クライアント接続管理](#クライアント接続管理)
     - [4.1.2 PriceManager.java - 株価管理システム](#412-pricemanagerjava---株価管理システム)
       - [価格変動ロジック](#価格変動ロジック)
       - [取引処理と価格保証](#取引処理と価格保証)
@@ -67,33 +66,17 @@ message pack
     - [4.2.2 リアルタイムデータ処理](#422-リアルタイムデータ処理)
     - [4.2.3 Chart.jsによるデータ可視化](#423-chartjsによるデータ可視化)
     - [4.2.4 レスポンシブUI実装](#424-レスポンシブui実装)
-  - [4.3 データ処理アルゴリズム](#43-データ処理アルゴリズム)
-    - [4.3.1 スライディングウィンドウ実装](#431-スライディングウィンドウ実装)
-    - [4.3.2 統計計算アルゴリズム](#432-統計計算アルゴリズム)
-    - [4.3.3 ポートフォリオ評価計算](#433-ポートフォリオ評価計算)
+      - [ブレークポイント設計](#ブレークポイント設計)
+      - [3段階レイアウト切り替え](#3段階レイアウト切り替え)
 - [5. 技術的工夫と課題解決](#5-技術的工夫と課題解決)
   - [5.1 データ整合性の保証](#51-データ整合性の保証)
     - [5.1.1 価格保証システム](#511-価格保証システム)
     - [5.1.2 並行処理対応](#512-並行処理対応)
-    - [5.1.3 空売り防止機能](#513-空売り防止機能)
+    - [5.1.3 空売り防止機能(未完成)](#513-空売り防止機能未完成)
   - [5.2 取引に応じた動的価格変動](#52-取引に応じた動的価格変動)
     - [5.2.1 価格変動アルゴリズム](#521-価格変動アルゴリズム)
-    - [5.2.2 取引量と価格の相関実装](#522-取引量と価格の相関実装)
   - [5.3 現実的な取引生成ロジック](#53-現実的な取引生成ロジック)
     - [5.3.1 保有株数ベースの売買判断](#531-保有株数ベースの売買判断)
-    - [5.3.2 投資家行動の多様性実現](#532-投資家行動の多様性実現)
-  - [5.4 パフォーマンス最適化](#54-パフォーマンス最適化)
-    - [5.4.1 ConcurrentHashMapの活用](#541-concurrenthashmapの活用)
-    - [5.4.2 効率的なデータ管理手法](#542-効率的なデータ管理手法)
-- [6. ユーザーインターフェース](#6-ユーザーインターフェース)
-  - [6.1 画面設計思想](#61-画面設計思想)
-  - [6.2 レスポンシブデザイン実装](#62-レスポンシブデザイン実装)
-    - [6.2.1 ブレークポイント設計](#621-ブレークポイント設計)
-    - [6.2.2 動的レイアウト切り替え](#622-動的レイアウト切り替え)
-  - [6.3 リアルタイム更新機能](#63-リアルタイム更新機能)
-  - [6.4 データ可視化手法](#64-データ可視化手法)
-    - [6.4.1 統計グラフの実装](#641-統計グラフの実装)
-    - [6.4.2 ポートフォリオ表示](#642-ポートフォリオ表示)
 - [7. 開発過程で直面した課題](#7-開発過程で直面した課題)
   - [7.1 技術的課題](#71-技術的課題)
     - [7.1.1 データ同期問題](#711-データ同期問題)
@@ -101,7 +84,6 @@ message pack
     - [7.1.3 リアルタイム性能の確保](#713-リアルタイム性能の確保)
   - [7.2 課題への対処法](#72-課題への対処法)
     - [7.2.1 実装した解決策](#721-実装した解決策)
-    - [7.2.2 応急対応と妥協点](#722-応急対応と妥協点)
   - [7.3 未解決の課題](#73-未解決の課題)
 - [8. 評価と検証](#8-評価と検証)
   - [8.1 機能評価](#81-機能評価)
@@ -145,18 +127,7 @@ message pack
       - [ポートフォリオ閲覧](#ポートフォリオ閲覧)
       - [統計情報の確認](#統計情報の確認)
       - [レスポンシブ表示の確認](#レスポンシブ表示の確認)
-  - [D. 動作デモ](#d-動作デモ)
-    - [画面構成](#画面構成)
-      - [デスクトップ表示 (3列レイアウト)](#デスクトップ表示-3列レイアウト)
-      - [モバイル表示 (2列レイアウト)](#モバイル表示-2列レイアウト)
-    - [主な機能の動作確認ポイント](#主な機能の動作確認ポイント)
-  - [11. まとめ](#11-まとめ-1)
-    - [11.1 開発成果](#111-開発成果)
-    - [11.2 学習した技術要素](#112-学習した技術要素)
-    - [11.3 今後の課題](#113-今後の課題-1)
-  - [E. 参考文献・謝辞](#e-参考文献謝辞)
-    - [参考文献](#参考文献)
-    - [謝辞](#謝辞)
+  - [D. 発表スライド](#d-発表スライド)
 
 # 0. 要旨
 
@@ -305,7 +276,7 @@ message pack
       TG[取引生成]
       PM[PriceManager.java]
 
-      ST --> WA -->|接続完了| TG -->|Socket通信| PM
+      ST --> WA -->|接続成功| TG -->|Socket通信| PM
     ```
 
 2. **価格計算フロー**(PriceManager.java)
@@ -322,8 +293,8 @@ message pack
      CD[統合データ作成]
      SP[StockProcessor]
 
-     ST --> TC --> |接続完了| TR --> PC --> CD --> |Socket通信| SP
-     TC -->|接続エラー| CE
+     ST --> TC --> |接続成功| TR --> PC --> CD --> |Socket通信| SP
+     TC -->|接続失敗| CE
    ```
 
 3. **分析処理フロー**(StockProcessor.java)
@@ -332,29 +303,33 @@ message pack
    ``` -->
    ```mermaid
    flowchart LR
-     SP[StockProcessor.java]
-     PMC[PriceManager接続]
+     ST[起動]
+     WC[WebSocket接続待機]
+     PMC[PriceManager接続確認]
      DR[統合データ受信]
      PU[ポートフォリオ更新]
      SC[統計計算]
-     WS[WebSocket送信]
+     FE[Reactフロントエンド]
 
-     SP --> PMC --> DR --> PU --> SC --> WS
+     ST --> WC -->|接続成功| PMC --> |接続接続成功| DR --> PU --> SC --> |WebSocket通信| FE
+     PMC --> |接続失敗| 終了
    ```
 
-4. **フロントエンド処理フロー**
+4. **フロントエンド処理フロー**(Reactフロントエンド)
    <!-- ```
    Reactフロントエンド → WebSocket接続 → データ受信 → 状態更新 → UI再レンダリング
    ``` -->
    ```mermaid
    flowchart LR
-     RF[Reactフロントエンド]
+     ST[起動]
+     BD[「接続」ボタン押下]
      WSC[WebSocket接続]
      DR[データ受信]
      SU[状態更新]
      UIR[UI再レンダリング]
 
-     RF --> WSC --> DR --> SU --> UIR
+     ST -->BD --> |接続成功| WSC --> DR --> SU --> UIR
+     WSC --> |接続失敗| BD
    ```
 
 
@@ -364,10 +339,10 @@ message pack
 - Transaction → PriceManager: 
   ```json
   {
-    "shareholderId": 1001,
-    "stockId": 8301,
+    "shareholderId": 11,
+    "stockId": 2,
     "quantity": 10,
-    "timestamp": "12:34:56.789"
+    "timestamp": "12:34:56.78"
   }
   ```
 
@@ -375,12 +350,13 @@ message pack
   ```json
   {
     "transaction": {
-      "shareholderId": 1001,
-      "stockId": 8301,
+      "shareholderId": 11,
+      "stockId": 2,
       "quantity": 10,
-      "timestamp": "12:34:56.789"
+      "timestamp": "12:34:56.78"
     },
-    "currentPrice": 1250
+    "currentPrice": 1250,
+    "priceUpdateTimestamp": "12:34:56.789123"
   }
   ```
 
@@ -409,8 +385,8 @@ message pack
 
    **旧構成**:
    ```
-   StockPrice.java (独立) ↘
-                          → StockProcessor.java
+   StockPrice.java (独立)  ↘
+                            StockProcessor.java
    Transaction.java (独立) ↗
    ```
 
@@ -533,9 +509,9 @@ tx.put("stockId", transaction.getStockId());
 tx.put("stockName", stockName);
 tx.put("quantity", transaction.getQuantity());
 tx.put("timestamp", transaction.getTimestamp());
-tx.put("currentPrice", (double) guaranteedPrice);
-tx.put("previousPrice", (double) previousPrice);
-tx.put("acquisitionPrice", (double) guaranteedPrice);
+tx.put("currentPrice", (double) guaranteedPrice); // 現在の価格
+tx.put("previousPrice", (double) previousPrice); // 前回の価格
+tx.put("acquisitionPrice", (double) guaranteedPrice); // 取得価格
 ```
 
 これにより、取引データに関連するすべての情報が処理できるようになります。
@@ -608,7 +584,7 @@ private static class RegionSummary {
 - **プロトコル**: TCP Socket
 - **ポート**: `Config.TRANSACTION_PORT` (設定ファイルで定義)
 - **データ形式**: JSON形式のテキストデータ
-- **メッセージ構造**:
+<!-- - **メッセージ構造**:
   ```json
   {
     "shareholderId": 1001,
@@ -616,7 +592,7 @@ private static class RegionSummary {
     "quantity": 10,
     "timestamp": "12:34:56.789"
   }
-  ```
+  ``` -->
 - **通信フロー**:
   1. PriceManagerがTCP Serverとして起動し、指定ポートでListen
   2. TransactionがClientとしてPriceManagerに接続
@@ -628,7 +604,7 @@ private static class RegionSummary {
 - **プロトコル**: TCP Socket
 - **ポート**: `Config.PRICE_MANAGER_PORT` (設定ファイルで定義)
 - **データ形式**: JSON形式のテキストデータ
-- **メッセージ構造**:
+<!-- - **メッセージ構造**:
   ```json
   {
     "transaction": {
@@ -639,14 +615,14 @@ private static class RegionSummary {
     },
     "currentPrice": 1250
   }
-  ```
+  ``` -->
 - **通信フロー**:
   1. PriceManagerがTCP Serverとして起動し、指定ポートでListen
   2. StockProcessorがClientとしてPriceManagerに接続
   3. PriceManager側から価格付き取引データを1行ずつJSON形式で送信
   4. StockProcessorが各データを受信・処理
 
-これらのSocket通信はバッファリングと非同期処理を採用しており、`BufferedReader`と`InputStreamReader`を使用して効率的なデータ転送を実現しています。
+これらのSocket通信は`BufferedReader`と`InputStreamReader`を使用してデータ転送しています。
 
 ### 3.3.2 WebSocket通信（クライアント-サーバー間）
 
@@ -700,7 +676,7 @@ StockProcessorとWebフロントエンド間の通信にはWebSocketを使用し
 - **通信フロー**:
   1. StockProcessorがWebSocketサーバーを起動
   2. Reactフロントエンドが接続
-  3. 株主IDと株主名の対応関係を最初に送信
+  3. 株主IDと株主名の対応関係を最初に送信(**ポートフォリオの株主選択用**)
   4. その後、定期的に各種データをリアルタイム送信
   5. フロントエンドは株主選択時にメッセージを送信
   6. 選択された株主のデータを重点的に送信
@@ -717,22 +693,30 @@ Transaction.javaは株式取引データを自動生成するコンポーネン�
 
 ```java
 public class Transaction {
-    // メタデータ管理
-    private static Map<Integer, StockInfo> stockInfoMap = new HashMap<>();
-    private static Map<Integer, ShareholderInfo> shareholderInfoMap = new HashMap<>();
+    // === インスタンス変数 ===
+    private int shareholderId;     // 株主ID
+    private int stockId;          // 銘柄ID  
+    private int quantity;         // 取引数量（正数=買い、負数=売り）
+    private LocalTime timestamp;  // 取引発生時刻
     
-    // 保有株数管理（株主ID_銘柄ID → 保有数）
-    private static Map<String, Integer> shareholderStockHoldings = new HashMap<>();
+    // === 静的フィールド（クラス全体で共有） ===
     
-    // 乱数生成器
-    private static final Random random = new Random();
+    // スケジューラー（定期的な取引生成制御）
+    private static ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private static ScheduledFuture<?> updateTask;
+    private static boolean isUpdateRunning = false;
     
-    // サーバーソケット
-    private static ServerSocket serverSocket;
+    // 通信関連
+    private static ServerSocket serverSocket; // フロントエンド接続用
+    private static List<PrintWriter> clientWriters = new CopyOnWriteArrayList<>(); // フロントエンド送信用
     
-    // クライアント管理
-    private static List<Socket> clientSockets = new ArrayList<>();
-    private static List<PrintWriter> clientWriters = new ArrayList<>();
+    // PriceManager通信用
+    private static Socket priceManagerSocket;
+    private static PrintWriter priceManagerWriter;
+    
+    // 保有株数管理（重要な機能）
+    private static ConcurrentHashMap<String, Integer> shareholderStockHoldings = new ConcurrentHashMap<>();
+    
 }
 ```
 
@@ -741,29 +725,45 @@ public class Transaction {
 取引生成は以下の主要メソッドで実装されています：
 
 ```java
-private static void generateAndSendTransaction() {
-    // 1. ランダムに株主と銘柄を選択
-    int shareholderId = selectRandomShareholder();
-    int stockId = selectRandomStock();
-    
-    // 2. 保有状況に基づいて売買判断と数量決定
-    String key = shareholderId + "_" + stockId;
-    int currentHoldings = shareholderStockHoldings.getOrDefault(key, 0);
-    int quantity = determineQuantity(currentHoldings);
-    
-    // 3. 取引後の保有数を更新
-    int newHoldings = currentHoldings + quantity;
-    shareholderStockHoldings.put(key, newHoldings);
-    
-    // 4. タイムスタンプ生成
-    String timestamp = getCurrentTimestamp();
-    
-    // 5. 取引データをJSON形式化
-    String transactionJson = createTransactionJson(
-        shareholderId, stockId, quantity, timestamp);
-    
-    // 6. 接続されているすべてのクライアントに送信
-    broadcastToClients(transactionJson);
+private static void updateTransactions() {
+   
+   LocalTime baseTime = LocalTime.now();
+   List<Transaction> transactions = new ArrayList<>();
+
+   
+   for (int i = 0; i < Config.getCurrentTradesPerUpdate(); i++) {
+
+       // 取引する株主と株IDをランダムで決定
+       int shareholderId = random.nextInt(Config.getCurrentShareholderCount()) + 1;
+       int stockId = random.nextInt(Config.getCurrentStockCount()) + 1;
+       
+       // 保有株数に応じた取引量のランダム決定
+       int quantity = generateSmartQuantity(shareholderId, stockId);
+
+       // タイムスタンプ生成
+       long nanoOffset = random.nextInt(Config.PRICE_UPDATE_INTERVAL_MS * 1_000_000);
+       LocalTime timestamp = baseTime.plusNanos(nanoOffset);
+
+       // 取引データをJSON形式化
+       Transaction transaction = new Transaction(shareholderId, stockId, quantity, timestamp);
+       transactions.add(transaction);
+       
+       // StockProcessor接続後のみ保有株数を更新
+       updateHoldings(shareholderId, stockId, quantity);
+       
+       // PriceManagerに送信
+       sendToPriceManager(transaction);
+   }
+
+   transactions.sort((t1, t2) -> t1.getTimestamp().compareTo(t2.getTimestamp()));
+
+   // クライアント（フロントエンド）にも送信
+   sendDataToClients(transactions);
+
+   // リスナーに更新を通知
+   for (StockTransactionUpdateListener listener : listeners) {
+       listener.onTransactionUpdate(new ArrayList<>(transactions));
+   }
 }
 ```
 
@@ -772,58 +772,39 @@ private static void generateAndSendTransaction() {
 取引数量の決定は以下の方針で行われます：
 
 ```java
-private static int determineQuantity(int currentHoldings) {
-    if (currentHoldings <= 0) {
-        // 未保有の場合は必ず買い注文
-        return generatePositiveQuantity();
-    } else {
-        // 保有している場合は買いまたは売りをランダムに決定
-        boolean isBuy = random.nextDouble() < 0.6;  // 60%の確率で買い
-        
-        if (isBuy) {
-            return generatePositiveQuantity();
-        } else {
-            // 売却量は保有数を超えないように制限
-            int maxSell = Math.min(currentHoldings, 50);
-            return -random.nextInt(maxSell) - 1;  // 負数 = 売り
-        }
-    }
-}
-
-private static int generatePositiveQuantity() {
-    // 1〜50の範囲でランダムな買い数量を生成
-    return random.nextInt(50) + 1;
-}
-```
-
-#### クライアント接続管理
-
-```java
-private static void startServer() throws IOException {
-    serverSocket = new ServerSocket(Config.TRANSACTION_PORT);
-    System.out.println("Transaction Server started on port " + Config.TRANSACTION_PORT);
+/**
+ * 保有株数を考慮したスマートな売買量生成（空売りなし版）
+ */
+private static int generateSmartQuantity(int shareholderId, int stockId) {
+    String key = shareholderId + "-" + stockId;
+    int currentHoldings = shareholderStockHoldings.getOrDefault(key, 0);
     
-    // クライアント接続を受け付けるスレッド
-    new Thread(() -> {
-        try {
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                System.out.println("New client connected: " + 
-                                  clientSocket.getInetAddress().getHostAddress());
-                
-                // 出力ストリームを設定
-                PrintWriter writer = new PrintWriter(
-                    new OutputStreamWriter(clientSocket.getOutputStream()), true);
-                
-                synchronized (clientSockets) {
-                    clientSockets.add(clientSocket);
-                    clientWriters.add(writer);
-                }
-            }
-        } catch (IOException e) {
-            System.err.println("Server socket error: " + e.getMessage());
-        }
-    }).start();
+    // デバッグ用ログ（10秒に1回程度表示）
+    if (System.currentTimeMillis() % 10000 < 100 && random.nextInt(100) < 1) {
+        System.out.println("株主" + shareholderId + "の株" + stockId + "保有数: " + currentHoldings + "株");
+    }
+    
+    // 保有状況に応じた売買ロジック
+    if (currentHoldings == 0) {
+        // 保有なし → 買いのみ（初期投資）
+        return generateBuyOnlyQuantity();
+        
+    } else if (currentHoldings <= 10) {
+        // 少量保有 → 買い優勢（積み立て傾向）
+        return generateBuyBiasedQuantity(currentHoldings);
+        
+    } else if (currentHoldings <= 50) {
+        // 中量保有 → バランス良く（通常取引）
+        return generateBalancedQuantityWithHoldings(currentHoldings);
+        
+    } else if (currentHoldings <= 100) {
+        // 大量保有 → 売り優勢（利確傾向）
+        return generateSellBiasedQuantity(currentHoldings);
+        
+    } else {
+        // 超大量保有 → 強い売り傾向（リスク管理）
+        return generateHeavySellQuantity(currentHoldings);
+    }
 }
 ```
 
@@ -833,20 +814,11 @@ PriceManager.javaは、取引に応じて株価を変動させ、価格保証を
 
 ```java
 public class PriceManager {
-    // 株価管理（銘柄ID → 現在価格）
-    private static Map<Integer, Integer> stockPriceMap = new ConcurrentHashMap<>();
-    
-    // メタデータ
-    private static Map<Integer, StockInfo> stockInfoMap;
-    
-    // トランザクションサーバー接続
-    private static Socket transactionSocket;
+    // Socket通信用
+    private static ServerSocket priceManagerServerSocket;
+    private static Socket transactionClientSocket;
     private static BufferedReader transactionReader;
-    
-    // StockProcessor向けサーバー
-    private static ServerSocket serverSocket;
-    private static List<Socket> clientSockets = new ArrayList<>();
-    private static List<PrintWriter> clientWriters = new ArrayList<>();
+    private static List<PrintWriter> stockProcessorWriters = new CopyOnWriteArrayList<>();
 }
 ```
 
@@ -855,68 +827,148 @@ public class PriceManager {
 株価変動は取引量と方向（買い/売り）に応じて計算されます：
 
 ```java
-private static int calculateNewPrice(int stockId, int quantity, int currentPrice) {
-    // 基本変動率の設定（買いなら上昇、売りなら下落）
-    double baseRate = (quantity > 0) ? 0.01 : -0.01;  // 基本1%の変動
-    
-    // 取引量に応じた倍率（大きな取引ほど影響大）
-    double volumeFactor = Math.min(2.0, 1.0 + Math.abs(quantity) / 100.0);
-    
-    // ランダム要素（市場のノイズを表現）
-    double randomFactor = 0.5 + random.nextDouble();  // 0.5〜1.5倍の範囲
-    
-    // 最終変動率の計算
-    double changeRate = baseRate * volumeFactor * randomFactor;
-    
-    // 新価格の計算（最低価格は1円）
-    int newPrice = (int)Math.max(1, currentPrice * (1 + changeRate));
-    
-    return newPrice;
+private static void processTransactionAndUpdatePrice(Transaction transaction) { // 取引データを受け取る
+  int stockId = transaction.getStockId();
+  StockPrice currentPrice = currentPrices.get(stockId);
+  
+  if (currentPrice == null) {
+      System.err.println("Stock ID " + stockId + " not found in current prices");
+      return;
+  }
+  
+  // 取引量に基づく価格変動計算(±1-5%程度)
+  int quantity = transaction.getQuantity();
+  double changeRate = calculatePriceChange(quantity, stockId);
+  
+  int basePrice = currentPrice.getPrice();
+  int newPrice = (int) Math.max(50, basePrice * (1 + changeRate));
+  
+  // 新しい価格で更新（LocalTimeも正しく処理）
+  StockPrice updatedPrice = new StockPrice(stockId, newPrice, transaction.getTimestamp());
+  currentPrices.put(stockId, updatedPrice);
+}
+
+/**
+ * 取引量に基づく価格変動計算
+ */
+private static double calculatePriceChange(int quantity, int stockId) {
+    // 買い注文（正の数量）は価格上昇、売り注文（負の数量）は価格下落
+    double baseChange = quantity > 0 ? 0.01 : -0.01; // 1%の基本変動
+    double volumeMultiplier = Math.min(Math.abs(quantity) / 100.0, 2.0); // 最大2倍
+    return baseChange * volumeMultiplier * (0.5 + random.nextDouble()); // ランダム要素
 }
 ```
 
 #### 取引処理と価格保証
 
 ```java
-private static void processTransaction(String transactionJson) {
-    try {
-        // 1. JSONからTransactionDataオブジェクトに変換
-        TransactionData transaction = gson.fromJson(transactionJson, TransactionData.class);
-        
-        // 2. 株価の取得と更新
-        int stockId = transaction.getStockId();
-        int currentPrice = stockPriceMap.getOrDefault(stockId, 1000);  // デフォルト1000円
-        int newPrice = calculateNewPrice(stockId, transaction.getQuantity(), currentPrice);
-        
-        // 3. 株価マップを更新
-        stockPriceMap.put(stockId, newPrice);
-        
-        // 4. 価格保証付き取引データを作成
-        TransactionWithPrice txWithPrice = new TransactionWithPrice(transaction, newPrice);
-        String resultJson = gson.toJson(txWithPrice);
-        
-        // 5. StockProcessorに送信
-        broadcastToClients(resultJson);
-        
-    } catch (JsonSyntaxException e) {
-        System.err.println("Invalid transaction JSON: " + e.getMessage());
-    }
+/**
+* 取引データと価格データを統合してStockProcessorに送信
+*/
+private static void sendTransactionWithPriceToStockProcessors(Transaction transaction) {
+  int stockId = transaction.getStockId();
+  StockPrice currentPrice = currentPrices.get(stockId);
+
+  if (currentPrice == null) {
+      System.err.println("株価が見つかりません: Stock ID " + stockId);
+      return;
+  }
+
+  // StockProcessorが接続されているかチェック
+  if (stockProcessorWriters.isEmpty()) {
+      // 接続されていない場合は単純にスキップ（バッファリングしない）
+      System.out.println("StockProcessor未接続 - 取引データをスキップ (株ID=" + stockId +
+              ", 数量=" + transaction.getQuantity() + ")");
+      return;
+  }
+
+  // 統合データを作成
+  TransactionWithPrice txWithPrice = new TransactionWithPrice(
+          transaction,
+          currentPrice.getPrice(),
+          LocalTime.now());
+
+  // カスタムGsonを使用してシリアライズ
+  String json = gson.toJson(txWithPrice);
+
+  // 全StockProcessorに送信
+  List<PrintWriter> writersToRemove = new ArrayList<>();
+  int successCount = 0;
+
+  for (PrintWriter writer : stockProcessorWriters) {
+      try {
+          writer.println(json);
+          writer.flush();
+          successCount++;
+
+      } catch (Exception e) {
+          System.err.println("StockProcessorへの送信エラー: " + e.getMessage());
+          writersToRemove.add(writer);
+      }
+  }
+
+  if (successCount > 0) {
+      System.out.println("→ 取引データ送信: 株ID=" + stockId +
+              ", 株主ID=" + transaction.getShareholderId() +
+              ", 数量=" + transaction.getQuantity() +
+              ", 価格=" + currentPrice.getPrice() +
+              " (" + successCount + "接続)");
+  }
 }
 ```
 
 #### 初期株価の設定
 
+株メタデータから得た配当利回りと資本金の情報を元にある程度のランダム性をもたせて株の初期価格を決定するようにした。
+
+
 ```java
-private static void initializeStockPrices() {
-    for (StockInfo stock : stockInfoMap.values()) {
-        // 基準価格を取得
-        int basePrice = stock.getBasePriceAsInt();
-        
-        // 初期価格をベース価格の80%〜120%の範囲でランダムに設定
-        int initialPrice = (int)(basePrice * (0.8 + random.nextDouble() * 0.4));
-        
-        // 価格マップに設定
-        stockPriceMap.put(stock.getStockId(), initialPrice);
+public static long calculateBasePrice(StockInfo stockInfo) {
+    int dividendPerShare = stockInfo.getDividendPerShare();
+    long capitalStock = stockInfo.getCapitalStock();
+    StockInfo.CompanyType companyType = stockInfo.getCompanyType();
+    
+    // 1. 配当利回りベースの価格計算
+    double dividendYield = getDividendYieldByCompanyType(companyType);
+    double priceFromDividend = dividendPerShare / (dividendYield / 100.0);
+    
+    // 2. 資本金ベースの価格計算
+    double marketCapMultiplier = getMarketCapMultiplier(companyType);
+    long estimatedMarketCap = (long)(capitalStock * marketCapMultiplier);
+    
+    // 発行済み株式数を資本金から推定（1株あたり50000円と仮定）
+    long estimatedShares = capitalStock / 50000;
+    double priceFromMarketCap = (double)estimatedMarketCap / estimatedShares;
+    
+    // 3. 両方の価格を重み付き平均
+    double basePrice = (priceFromDividend * 0.4) + (priceFromMarketCap * 0.6);
+    
+    // 4. ランダム性を追加（±20%）
+    double randomFactor = 0.8 + (random.nextDouble() * 0.4); // 0.8-1.2の範囲
+    
+    // 5. 最終価格（100円以上になるよう調整）
+    double finalPrice = Math.max(100, basePrice * randomFactor);
+    
+    return Math.round(finalPrice);
+}
+
+private static double getDividendYieldByCompanyType(StockInfo.CompanyType type) {
+    // 配当利回り（%）
+    switch (type) {
+        case LARGE:  return 1.5 + random.nextGaussian() * 0.5; // 1-2%程度
+        case MEDIUM: return 2.5 + random.nextGaussian() * 0.7; // 1.8-3.2%程度
+        case SMALL:  return 3.5 + random.nextGaussian() * 1.0; // 2.5-4.5%程度
+        default:     return 2.5;
+    }
+}
+
+private static double getMarketCapMultiplier(StockInfo.CompanyType type) {
+    // 時価総額 = 資本金 × この倍率
+    switch (type) {
+        case LARGE:  return 3.0 + random.nextGaussian() * 1.0;  // 2-4倍
+        case MEDIUM: return 2.0 + random.nextGaussian() * 0.7;  // 1.3-2.7倍
+        case SMALL:  return 1.5 + random.nextGaussian() * 0.5;  // 1-2倍
+        default:     return 2.0;
     }
 }
 ```
@@ -1215,122 +1267,204 @@ public class WebsocketServer {
 
 フロントエンドはReact + TypeScriptで実装され、以下の基本構成を持ちます：
 
-```tsx
+```typescript
 // App.tsx - メインコンポーネント
-import React, { useEffect, useState } from 'react';
-import { Container, Row, Col } from 'react-bootstrap';
-import TransactionTable from './components/TransactionTable';
-import PortfolioSection from './components/PortfolioSection';
-import GenderStatsSection from './components/GenderStatsSection';
-import GenerationStatsSection from './components/GenerationStatsSection';
-import useWebSocket from './hooks/useWebSocket';
-import { TransactionData, PortfolioSummary, GenderStats, GenerationStats } from './DataType';
+import { useEffect, useRef, useState } from "react";
+import { Col, Container, Row } from "react-bootstrap";
+import ToggleButton from "react-bootstrap/esm/ToggleButton";
+import "./App.css";
+import GenderStatsSection from "./components/GenderStatsSection";
+import GenerationStatsSection from "./components/GenerationStatsSection";
+import PortfolioSection from "./components/PortfolioSection";
+import TransactionHistorySection from "./components/TransactionHistorySection";
+import {
+  type GenderStats,
+  type GenerationStats,
+  type PortfolioSummary,
+  type ServerMessage,
+  type ShareholderIdNameMap,
+  type TransactionHistory
+} from "./DataType";
 
-const App: React.FC = () => {
-  // WebSocket接続とデータ状態
-  const [isConnected, connect, disconnect] = useWebSocket(
-    handleMessage, 'ws://localhost:8887'
-  );
+function App() {
   
-  // 各種データ状態
-  const [transactions, setTransactions] = useState<TransactionData[]>([]);
-  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
-  const [genderStats, setGenderStats] = useState<GenderStats | null>(null);
-  const [generationStats, setGenerationStats] = useState<GenerationStats | null>(null);
-  const [shareholderOptions, setShareholderOptions] = useState<{[key: number]: string}>({});
-  const [selectedShareholderId, setSelectedShareholderId] = useState<number>(0);
+  const [is_trying_connect, setIsTryingConnect] = useState(false); // 接続状況
+  const [shareholderIdNameMap, setShareholderIdNameMap] = useState<ShareholderIdNameMap>(); // ポートフォリオの株主選択用
+  const [transactionHistory, setTransactionHistory] = useState<TransactionHistory | null>(null); // 取引履歴
+  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null); // ポートフォリオ
+  const [genderStats, setGenderStats] = useState<GenderStats | null>(null); // 性別統計
+  const [generationStats, setGenerationStats] = useState<GenerationStats | null>(null); // 年代別統計
 
-  // WebSocketメッセージハンドラ
-  function handleMessage(event: MessageEvent) {
-    try {
-      const data = JSON.parse(event.data);
-      
-      // メッセージタイプに基づいて適切な状態を更新
-      switch(data.type) {
-        case 'transaction_history':
-          setTransactions(data.transactions);
-          break;
-        case 'portfolio_summary':
-          setPortfolioSummary(data);
-          break;
-        case 'gender_stats':
-          setGenderStats(data);
-          break;
-        case 'generation_stats':
-          setGenerationStats(data);
-          break;
-        case 'ShareholderIdNameMap':
-          setShareholderOptions(data.ShareholderIdNameMap);
-          break;
-      }
-    } catch (e) {
-      console.error('WebSocketメッセージ処理エラー:', e);
-    }
-  }
-
-  // レスポンシブレイアウト用の画面幅検出
+  // ウィンドウサイズ管理
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  const wsRef = useRef<WebSocket | null>(null);
+
+  // ウィンドウサイズ監視
   useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 画面幅に応じたレイアウト分岐
-  const isWideScreen = windowWidth >= 1200;
+  // WebSocket接続処理
+  useEffect(() => {
+    let connection: WebSocket | null = null;
+
+    const connectWebSocket = () => {
+      connection = new WebSocket("ws://localhost:3000");
+      wsRef.current = connection;
+
+      connection.onopen = () => {
+        console.log("WebSocket connected");
+      };
+
+      connection.onmessage = (event) => {
+        try {
+          const msg: ServerMessage = JSON.parse(event.data);
+          setRawData(JSON.stringify(msg, null, 2));
+          switch (msg.type) {
+            case "portfolio_summary":
+              setPortfolioSummary(msg); break;
+            case "transaction_history":
+              setTransactionHistory(msg); break;
+            case "ShareholderIdNameMap":
+              setShareholderIdNameMap(msg.ShareholderIdNameMap); break;
+            case "gender_stats":
+              setGenderStats(msg); break;
+            case "generation_stats":
+              setGenerationStats(msg); break;
+            default:  break;
+          }
+          console.log("msg data:", msg);
+        } catch {
+          if (event.data) console.log("msg non-JSON data:", event.data);
+        }
+      };
+
+      connection.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        alert("WebSocket接続に失敗しました。");
+        setIsTryingConnect(false);
+      };
+
+      connection.onclose = () => {
+        console.log("WebSocket disconnected");
+        setIsTryingConnect(false);
+      };
+    };
+
+    if (is_trying_connect) {
+      connectWebSocket();
+    }
+
+    return () => {
+      if (connection) connection.close();
+      wsRef.current = null;
+    };
+  }, [is_trying_connect]);
+
+  // ブレークポイント定義
+  const MOBILE_BREAKPOINT = 768;  // md未満: 1列表示
+  const TABLET_BREAKPOINT = 992;  // lg未満: 2列表示  
+
+
+  // レイアウト判定
+  const isMobile = windowWidth < MOBILE_BREAKPOINT;
+  const isTablet = windowWidth >= MOBILE_BREAKPOINT && windowWidth < TABLET_BREAKPOINT;
+
 
   return (
-    <Container fluid className="p-3">
-      {/* 接続ボタン */}
-      <div className="text-center mb-4">
-        <button 
-          onClick={isConnected ? disconnect : connect}
-          className={`btn ${isConnected ? 'btn-danger' : 'btn-success'} btn-lg`}
-        >
-          {isConnected ? '切断' : '接続'}
-        </button>
+    <div className="App">
+      <h1 id="title">課題 6</h1>
+      <div id="connection-button-section">
+        <ToggleButton
+          id="toggle-connection"
+          type="checkbox"
+          variant="outline-primary"
+          checked={is_trying_connect}
+          value="1"
+          onChange={(e)=>setIsConnected(e.currentTarget.checked)}
+          >
+        </ToggleButton>
       </div>
 
-      {isWideScreen ? (
-        // PC向け3列レイアウト
-        <Row>
-          <Col md={4} className="mb-4">
-            <GenderStatsSection genderStats={genderStats} />
-            <GenerationStatsSection generationStats={generationStats} />
-          </Col>
-          <Col md={4} className="mb-4">
-            <PortfolioSection 
+      <Container fluid className="p-3">
+        {isMobile ? (
+          // モバイル: 1列表示
+          <div className="d-flex flex-column gap-3">
+            <PortfolioSection
+              shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
+              ws={wsRef.current}
               portfolioSummary={portfolioSummary}
-              selectedId={selectedShareholderId}
-              setSelectedId={setSelectedShareholderId}
-              shareholderOptions={shareholderOptions}
             />
-          </Col>
-          <Col md={4} className="mb-4">
-            <TransactionTable transactions={transactions} />
-          </Col>
-        </Row>
-      ) : (
-        // タブレット・モバイル向け2列レイアウト
-        <Row>
-          <Col md={6} className="mb-4">
-            <PortfolioSection 
-              portfolioSummary={portfolioSummary}
-              selectedId={selectedShareholderId}
-              setSelectedId={setSelectedShareholderId}
-              shareholderOptions={shareholderOptions}
+            <TransactionHistorySection
+              transactionHistory={transactionHistory}
+              isTryingConnect={is_trying_connect}
+              setIsTryingConnect={setIsTryingConnect}
             />
             <GenderStatsSection genderStats={genderStats} />
-          </Col>
-          <Col md={6} className="mb-4">
-            <TransactionTable transactions={transactions} />
             <GenerationStatsSection generationStats={generationStats} />
-          </Col>
-        </Row>
-      )}
-    </Container>
+          </div>
+        ) : isTablet ? (
+          // タブレット: 2列表示
+          <Row>
+            <Col md={6} className="mb-4">
+              <div className="d-flex flex-column gap-3">
+                <PortfolioSection
+                  shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
+                  ws={wsRef.current}
+                  portfolioSummary={portfolioSummary}
+                />
+                <GenderStatsSection genderStats={genderStats} />
+              </div>
+            </Col>
+            <Col md={6} className="mb-4">
+              <div className="d-flex flex-column gap-3">
+                <TransactionHistorySection
+                  transactionHistory={transactionHistory}
+                  isTryingConnect={is_trying_connect}
+                  setIsTryingConnect={setIsTryingConnect}
+                />
+                <GenerationStatsSection generationStats={generationStats} />
+              </div>
+            </Col>
+          </Row>
+        ) : (
+          // デスクトップ: 3列表示
+          <Row>
+            <Col lg={4} className="mb-4">
+              <div className="d-flex flex-column gap-3">
+                <GenderStatsSection genderStats={genderStats} />
+                <GenerationStatsSection generationStats={generationStats} />
+              </div>
+            </Col>
+            <Col lg={4} className="mb-4">
+              <div className="d-flex flex-column gap-3">
+                <PortfolioSection
+                  shareholderIdNameMap={shareholderIdNameMap ?? {} as ShareholderIdNameMap}
+                  ws={wsRef.current}
+                  portfolioSummary={portfolioSummary}
+                />
+              </div>
+            </Col>
+            <Col lg={4} className="mb-4">
+              <TransactionHistorySection
+                transactionHistory={transactionHistory}
+                isTryingConnect={is_trying_connect}
+                setIsTryingConnect={setIsTryingConnect}
+              />
+            </Col>
+          </Row>
+        )
+        }
+      </Container>
+    </div>
   );
-};
+}
 
 export default App;
 ```
@@ -1339,7 +1473,7 @@ export default App;
 
 リアルタイムデータ処理のためのカスタムフックを実装しています：
 
-```tsx
+```typescript
 // hooks/useWebSocket.ts
 import { useCallback, useEffect, useState } from 'react';
 
@@ -1411,7 +1545,7 @@ export default useWebSocket;
 
 Chart.jsを使用して、さまざまなグラフを実装しています：
 
-```tsx
+```typescript
 // components/PortfolioSection.tsx - 地域別ポートフォリオ円グラフ
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
@@ -1478,40 +1612,36 @@ const RegionChart = ({ portfolioSummary }) => {
 
 ### 4.2.4 レスポンシブUI実装
 
-レスポンシブUIはReact Bootstrapとカスタムスタイリングを組み合わせて実装しています：
+React Bootstrapを活用して、画面サイズに応じて３段階のレイアウトを動的に切り替えるレスポンシブデザインを実装しました。
+発表時はTailwindCSSを用いたと述べました。ですが、コードを見たときの可読性を考慮した結果、以下のような実装になりました。
 
-```tsx
-// App.tsxからのレスポンシブ対応
-const isWideScreen = windowWidth >= 1200;
+#### ブレークポイント設計
 
-{isWideScreen ? (
-  // PC向け3列レイアウト
-  <Row>
-    <Col md={4}>{/* 統計情報 */}</Col>
-    <Col md={4}>{/* ポートフォリオ */}</Col>
-    <Col md={4}>{/* 取引履歴 */}</Col>
-  </Row>
-) : (
-  // タブレット・モバイル向け2列レイアウト
-  <Row>
-    <Col md={6}>{/* ポートフォリオ+統計 */}</Col>
-    <Col md={6}>{/* 取引履歴+統計 */}</Col>
-  </Row>
-)}
+```typescript
+// ブレークポイント定義
+const MOBILE_BREAKPOINT = 768;   // md未満: 1列表示
+const TABLET_BREAKPOINT = 992;   // lg未満: 2列表示
 
-// PortfolioSection.tsxの動的高さ設定
-const containerStyle = {
-  maxHeight: isWideScreen ? '850px' : '600px',
-  overflowY: 'auto' as const,
-  padding: '15px',
-  borderRadius: '8px',
-  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
-};
+// レイアウト判定
+const isMobile = windowWidth < MOBILE_BREAKPOINT;
+const isTablet = windowWidth >= MOBILE_BREAKPOINT && windowWidth < TABLET_BREAKPOINT;
 ```
 
-## 4.3 データ処理アルゴリズム
+#### 3段階レイアウト切り替え
 
-### 4.3.1 スライディングウィンドウ実装
+**1. モバイル (768px未満): 1列縦並び**
+![alt text](images/image-24.png)
+
+**2. タブレット (768px-992px): 2列表示**
+![alt text](images/image-26.png)
+
+**3. デスクトップ (992px以上): 3列表示**
+![alt text](images/image-27.png)
+
+
+<!-- ## 4.3 データ処理アルゴリズム -->
+
+<!-- ### 4.3.1 スライディングウィンドウ実装
 
 スライディングウィンドウは、特定時間枠内の取引データを管理するために実装されています：
 
@@ -1955,7 +2085,7 @@ private static Map<String, Object> createRegionSummaryMap(Map<String, RegionSumm
 3. **ソート処理**: 銘柄IDでソートして見やすく表示
 4. **並行処理対応**: ConcurrentHashMapとスレッドセーフな集計処理
 
-この実装により、各投資家のポートフォリオを正確に評価し、現在の資産状況や投資成績を即座に把握することができます。
+この実装により、各投資家のポートフォリオを正確に評価し、現在の資産状況や投資成績を即座に把握することができます。 -->
 
 # 5. 技術的工夫と課題解決
 
@@ -2051,7 +2181,7 @@ public class PriceManager {
 
 これらの技術を組み合わせることで、高い並行性を維持しながらデータの整合性を保証しています。特に、複数サービス間での通信において、データの不整合やタイミング問題を最小化することに成功しました。
 
-### 5.1.3 空売り防止機能
+### 5.1.3 空売り防止機能(未完成)
 
 投資システムでは、保有株数以上の売却（空売り）を防ぐ機能が重要です。本システムでは以下の空売り防止機能を実装しました。
 
@@ -2110,9 +2240,9 @@ public class PriceManager {
 
 ### 5.2.1 価格変動アルゴリズム
 
-実際の市場では、取引量や取引方向（買いか売りか）に応じて株価が変動します。本システムでは、よりリアルな市場シミュレーションを実現するために、取引に応じた動的価格変動アルゴリズムを実装しました。
+実際の市場では、取引量や取引方向（買いか売りか）に応じて株価が変動します。本システムでは、よりリアルな市場シミュレーションを実現するために、取引に応じた動的価格変動アルゴリズムを実装しました。[価格変動のコード](#価格変動ロジック)
 
-**アルゴリズムの概要**:
+<!-- **アルゴリズムの概要**:
 
 ```java
 private static int calculateNewPrice(int stockId, int quantity, int currentPrice) {
@@ -2133,15 +2263,16 @@ private static int calculateNewPrice(int stockId, int quantity, int currentPrice
     
     return newPrice;
 }
-```
+``` -->
 
 このアルゴリズムは以下の要素を考慮しています：
 
 1. **取引方向**: 買い注文は価格上昇、売り注文は価格下落を引き起こします
 2. **取引量**: 大量の取引ほど価格変動が大きくなります
 3. **市場ノイズ**: ランダム要素を加えることで予測不可能性を実現
+   1. 改めて考えると、取引量に基づく更新価格の決定は一意に定まるべきであると考えられるため、ランダム要素は持たせないほうが妥当かもしれない。
 
-### 5.2.2 取引量と価格の相関実装
+<!-- ### 5.2.2 取引量と価格の相関実装
 
 取引量と価格変動の関係性をより現実的にするため、以下の相関関係を実装しています：
 
@@ -2174,15 +2305,15 @@ private static int calculateNewPrice(int stockId, int quantity, int currentPrice
    changeRate = changeRate * (1000.0 / liquidity);
    ```
 
-これらの要素を組み合わせることで、各銘柄の特性や市場状況に応じた現実的な価格変動を実現しています。さらに、取引履歴データを蓄積することで、過去のパターンに基づいた価格予測モデルの実装も将来的に可能になります。
+これらの要素を組み合わせることで、各銘柄の特性や市場状況に応じた現実的な価格変動を実現しています。さらに、取引履歴データを蓄積することで、過去のパターンに基づいた価格予測モデルの実装も将来的に可能になります。 -->
 
 ## 5.3 現実的な取引生成ロジック
 
 ### 5.3.1 保有株数ベースの売買判断
 
-現実の投資家行動をシミュレートするため、保有株数に基づいた売買判断ロジックを実装しました。
+現実の投資家行動をシミュレートするため、保有株数に基づいた売買判断ロジックを実装しました。[保有株数ベースの売買量決定コード](#売買数量決定ロジック)
 
-```java
+<!-- ```java
 private static int generateSmartQuantity(int shareholderId, int stockId) {
     String key = shareholderId + "_" + stockId;
     int currentHoldings = shareholderStockHoldings.getOrDefault(key, 0);
@@ -2212,7 +2343,7 @@ private static int generateSmartQuantity(int shareholderId, int stockId) {
                generatePositiveQuantity();
     }
 }
-```
+``` -->
 
 このロジックにより、投資家の行動がより現実的になり、以下のような特徴が再現されます：
 
@@ -2221,7 +2352,7 @@ private static int generateSmartQuantity(int shareholderId, int stockId) {
 - 中量保有ではバランスの取れた売買
 - 大量保有では利益確定の売り傾向が強くなる
 
-### 5.3.2 投資家行動の多様性実現
+<!-- ### 5.3.2 投資家行動の多様性実現
 
 投資家ごとに異なる投資スタイルを持つ現実をシミュレートするため、株主のメタデータに基づいた行動パターンの多様化を実装しました。
 
@@ -2249,9 +2380,9 @@ private static double getInvestorRiskTolerance(int shareholderId) {
 2. **性別による微調整**: 統計的傾向に基づくわずかな差異
 3. **個人差**: 同じ年齢・性別でも個人ごとに異なる傾向
 
-これにより、5000人の株主それぞれが個性的な投資行動を取る、より多様性のあるシミュレーションが可能になります。
+これにより、5000人の株主それぞれが個性的な投資行動を取る、より多様性のあるシミュレーションが可能になります。 -->
 
-## 5.4 パフォーマンス最適化
+<!-- ## 5.4 パフォーマンス最適化
 
 ### 5.4.1 ConcurrentHashMapの活用
 
@@ -2354,11 +2485,11 @@ ConcurrentHashMapを選択した理由：
    ```
    Gsonインスタンスの再利用と送信前の構文チェックにより、パフォーマンスとエラー耐性を向上させています。
 
-これらの最適化手法により、1秒あたり数百件の取引を処理しながらも、システムは安定して動作し、低レイテンシでのリアルタイム応答を実現しています。
+これらの最適化手法により、1秒あたり数百件の取引を処理しながらも、システムは安定して動作し、低レイテンシでのリアルタイム応答を実現しています。 -->
 
-# 6. ユーザーインターフェース
+<!-- # 6. ユーザーインターフェース -->
 
-## 6.1 画面設計思想
+<!-- ## 6.1 画面設計思想
 
 本システムのユーザーインターフェースは、以下の設計思想に基づいて構築されました：
 
@@ -2374,7 +2505,7 @@ ConcurrentHashMapを選択した理由：
 
 メインの画面コンポーネントは以下の3つで構成されています：
 
-```tsx
+```typescript
 <Row>
   {/* 左カラム: 統計情報 */}
   <Col md={4}>
@@ -2397,15 +2528,15 @@ ConcurrentHashMapを選択した理由：
     <TransactionTable transactions={transactions} />
   </Col>
 </Row>
-```
+``` -->
 
-## 6.2 レスポンシブデザイン実装
+<!-- ## 6.2 レスポンシブデザイン実装 -->
 
-### 6.2.1 ブレークポイント設計
+<!-- ### 6.2.1 ブレークポイント設計
 
 異なる画面サイズに対応するため、以下のブレークポイント設計を採用しました：
 
-```tsx
+```typescript
 // App.tsx
 const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
@@ -2422,13 +2553,13 @@ const isWideScreen = windowWidth >= 1200;
 主要なブレークポイントは以下の通りです：
 
 - **1200px以上**: デスクトップ向け3列レイアウト
-- **1200px未満**: タブレット・モバイル向け2列レイアウト
+- **1200px未満**: タブレット・モバイル向け2列レイアウト -->
 
-### 6.2.2 動的レイアウト切り替え
+<!-- ### 6.2.2 動的レイアウト切り替え
 
 画面サイズに応じて最適なレイアウトに自動調整するため、以下の動的レイアウト切り替え機能を実装しました：
 
-```tsx
+```typescript
 {isWideScreen ? (
   // 3列レイアウト: 統計 | ポートフォリオ | 取引履歴
   <>
@@ -2463,7 +2594,7 @@ const isWideScreen = windowWidth >= 1200;
 
 さらに、各コンポーネント内でも画面サイズに応じた調整を行っています：
 
-```tsx
+```typescript
 // PortfolioSection.tsx内の高さ制御
 const tableContainerStyle = {
   maxHeight: isWideScreen ? "600px" : "400px",
@@ -2475,14 +2606,14 @@ const tableContainerStyle = {
 const chartSize = isWideScreen ? { width: "350px", height: "300px" } : { width: "100%", height: "250px" };
 ```
 
-これらの実装により、PC・タブレット・スマートフォンなど様々なデバイスで最適な表示が可能になりました。
+これらの実装により、PC・タブレット・スマートフォンなど様々なデバイスで最適な表示が可能になりました。 -->
 
-## 6.3 リアルタイム更新機能
+<!-- ## 6.3 リアルタイム更新機能
 
 ユーザーエクスペリエンスを向上させるため、以下のリアルタイム更新機能を実装しました：
 
 1. **WebSocketベースの双方向通信**:
-   ```tsx
+   ```typescript
    // useWebSocket.ts - カスタムフック
    const [socket, setSocket] = useState<WebSocket | null>(null);
    const [isConnected, setIsConnected] = useState(false);
@@ -2506,7 +2637,7 @@ const chartSize = isWideScreen ? { width: "350px", height: "300px" } : { width: 
    ```
 
 2. **メッセージタイプに基づく状態更新**:
-   ```tsx
+   ```typescript
    function handleMessage(event: MessageEvent) {
      try {
        const data = JSON.parse(event.data);
@@ -2533,7 +2664,7 @@ const chartSize = isWideScreen ? { width: "350px", height: "300px" } : { width: 
    ```
 
 3. **接続状態の視覚的フィードバック**:
-   ```tsx
+   ```typescript
    <div className="text-center mb-4">
      <button 
        onClick={isConnected ? disconnect : connect}
@@ -2547,7 +2678,7 @@ const chartSize = isWideScreen ? { width: "350px", height: "300px" } : { width: 
    ```
 
 4. **滑らかなアニメーション遷移**:
-   ```tsx
+   ```typescript
    // Chart.jsのアニメーション設定
    const chartOptions = {
      responsive: true,
@@ -2559,17 +2690,17 @@ const chartSize = isWideScreen ? { width: "350px", height: "300px" } : { width: 
    };
    ```
 
-これらの実装により、データ更新時の視覚的なフィードバックが提供され、ユーザーは常に最新の情報を把握できます。特に、株価変動やポートフォリオ価値の変化がリアルタイムでアニメーションとともに表示されることで、市場のダイナミクスを直感的に理解しやすくなっています。
+これらの実装により、データ更新時の視覚的なフィードバックが提供され、ユーザーは常に最新の情報を把握できます。特に、株価変動やポートフォリオ価値の変化がリアルタイムでアニメーションとともに表示されることで、市場のダイナミクスを直感的に理解しやすくなっています。 -->
 
-## 6.4 データ可視化手法
+<!-- ## 6.4 データ可視化手法 -->
 
-### 6.4.1 統計グラフの実装
+<!-- ### 6.4.1 統計グラフの実装
 
 本システムでは、Chart.jsとreact-chartjs-2を活用して、統計データを視覚的に分かりやすく表示しています。
 
 **1. 性別統計の円グラフ**:
 
-```tsx
+```typescript
 // GenderStatsSection.tsx
 const genderChartData = {
   labels: ['男性', '女性'],
@@ -2615,7 +2746,7 @@ return (
 
 **2. 年代別統計の棒グラフ**:
 
-```tsx
+```typescript
 // GenerationStatsSection.tsx
 const generationChartData = {
   labels: ['20代', '30代', '40代', '50代', '60代', '70代+'],
@@ -2661,15 +2792,15 @@ return (
     {/* 詳細テーブル... */}
   </div>
 );
-```
+``` -->
 
-### 6.4.2 ポートフォリオ表示
+<!-- ### 6.4.2 ポートフォリオ表示
 
 ポートフォリオ表示では、表形式のデータと地域別構成の円グラフを組み合わせることで、総合的な資産状況の把握を可能にしています。
 
 **1. 保有銘柄テーブル**:
 
-```tsx
+```typescript
 // PortfolioSection.tsx
 <Table striped hover>
   <thead>
@@ -2709,7 +2840,7 @@ return (
 
 **2. 地域別資産構成の円グラフ**:
 
-```tsx
+```typescript
 // PortfolioSection.tsx内の地域別資産配分
 const createChartData = () => {
   if (!portfolioSummary?.regionSummary) {
@@ -2791,7 +2922,7 @@ const createChartData = () => {
 )}
 ```
 
-これらの可視化手法により、複雑な金融データであっても、ユーザーは直感的に情報を把握し、投資判断に役立てることができます。特に色分けや比率表示により、資産配分の偏りや各地域の損益状況を一目で理解できる設計となっています。
+これらの可視化手法により、複雑な金融データであっても、ユーザーは直感的に情報を把握し、投資判断に役立てることができます。特に色分けや比率表示により、資産配分の偏りや各地域の損益状況を一目で理解できる設計となっています。 -->
 
 # 7. 開発過程で直面した課題
 
@@ -2824,7 +2955,8 @@ const createChartData = () => {
    // portfolio内の該当銘柄の保有数が0なら、結果として-10株になる
    ```
 
-これらの問題は、マイクロサービスアーキテクチャの一般的な課題である「分散データの一貫性」の典型例です。各サービスが独自のデータモデルを持ち、それらの間の一貫性を保つのが難しいという問題が顕在化しました。
+<!-- これらの問題は、マイクロサービスアーキテクチャの一般的な課題である「分散データの一貫性」の典型例です。 -->
+<!-- 各サービスが独自のデータモデルを持ち、それらの間の一貫性を保つのが難しいという問題が顕在化しました。 -->
 
 ### 7.1.2 マイクロサービス間通信の複雑性
 
@@ -2835,7 +2967,7 @@ const createChartData = () => {
    Transaction.java ↔ PriceManager.java ↔ StockProcessor.java
    ```
    
-   この構造で、StockProcessorの接続状態をTransactionに伝えるためには、PriceManagerを介した双方向通信が必要でした。しかし、この実装は技術的に複雑で、時間的制約の中で完全には実装できませんでした。
+   この構造で、StockProcessorの接続状態をTransactionに伝えるためには、PriceManagerを介した双方向通信が必要でした。しかし、この実装は、〆切直前の仕様変更だったこともあり、時間的制約の中で完全には実装できませんでした。
 
 2. **接続状態管理**:
    各サービスの接続状態を追跡し、他サービスに通知する仕組みが不十分でした。例えば：
@@ -2882,12 +3014,13 @@ const createChartData = () => {
 
 ### 7.1.3 リアルタイム性能の確保
 
-リアルタイムデータ処理におけるパフォーマンスの確保も大きな課題でした：
+リアルタイムデータ処理におけるパフォーマンスの確保も大きな課題でした
 
-1. **データ量と更新頻度のトレードオフ**:
-   リアルタイム性を高めるために更新頻度を上げると、データ量が増加し、帯域とクライアント側の処理負荷が増大する問題がありました。
+**データ量と更新頻度のトレードオフ**:
+   リアルタイム性を高めるために更新頻度を上げると、データ量が増加し、クライアント側の処理負荷が増大する問題がありました。
+   クライアント側での接続完了から、表示更新まで
 
-2. **WebSocket接続の安定性**:
+<!-- 2. **WebSocket接続の安定性**:
    WebSocket接続のタイムアウトや再接続ロジックに関する課題がありました：
    
    ```java
@@ -2897,9 +3030,9 @@ const createChartData = () => {
        System.err.println("WebSocketエラー: " + ex.getMessage());
        // 再接続ロジックの実装が不十分
    }
-   ```
+   ``` -->
 
-3. **メモリ管理の課題**:
+<!-- 3. **メモリ管理の課題**:
    長時間稼働時のメモリリークの可能性がありました。特にtransactionBufferの処理では、古いデータの削除ロジックが重要でした：
    
    ```java
@@ -2912,12 +3045,12 @@ const createChartData = () => {
        });
        // ...
    }
-   ```
+   ``` -->
 
-4. **リアルタイム集計処理の複雑性**:
+<!-- 4. **リアルタイム集計処理の複雑性**:
    性別統計や年代別統計などのリアルタイム集計処理は、CPU負荷が高く、特に取引頻度が高い場合にボトルネックになる可能性がありました。
 
-これらの課題を解決するために、スライディングウィンドウ技術や効率的なデータ構造（ConcurrentHashMapなど）を活用しました。
+これらの課題を解決するために、スライディングウィンドウ技術や効率的なデータ構造（ConcurrentHashMapなど）を活用しました。 -->
 
 ## 7.2 課題への対処法
 
@@ -2937,6 +3070,8 @@ const createChartData = () => {
        ))
      }
      ```
+      - 本来はTransaction.javaとStockProcessor.java間で保有株数を同期すべきでしたが、時間的制約により、フロントエンドでマイナス保有を非表示にする応急対応を取りました。
+
    - **PriceManager統合型アーキテクチャ**: 取引と株価の整合性を保証するため、PriceManagerを中心としたアーキテクチャに変更
      ```java
      // PriceManager.java内の価格保証処理
@@ -2980,91 +3115,18 @@ const createChartData = () => {
      ```
 
 3. **パフォーマンス最適化**:
-   - **スライディングウィンドウ**: データ量の管理と効率的な処理
-     ```java
-     // ウィンドウ設定
-     private static final int WINDOW_SIZE_SECONDS = 5;
-     private static final int SLIDE_SIZE_SECONDS = 1;
-     
-     // ウィンドウスライド処理
-     LocalTime newStart = window[0].plusSeconds(SLIDE_SIZE_SECONDS);
-     LocalTime newEnd = window[1].plusSeconds(SLIDE_SIZE_SECONDS);
-     ```
    - **選択的データ送信**: 必要なデータのみをWebSocketで送信
      ```java
      // 選択中株主ID
      private static final AtomicReference<Integer> selectedShareholderId = new AtomicReference<>(null);
      
-     // 選択された株主のデータのみ詳細送信
+     // 選択された株主のポートフォリオデータのみ詳細送信
      Integer selectedId = selectedShareholderId.get();
      if (selectedId != null) {
          String portfolioJson = getPortfolioSummaryJson(selectedId);
          sendToWebClients(portfolioJson);
      }
      ```
-
-4. **レスポンシブUI設計**:
-   - **動的レイアウト切り替え**: 画面サイズに応じた最適なレイアウト
-     ```tsx
-     const isWideScreen = windowWidth >= 1200;
-     
-     {isWideScreen ? (
-       // 3列レイアウト
-     ) : (
-       // 2列レイアウト
-     )}
-     ```
-   - **コンポーネント設計**: 個別に最適化されたUI要素
-     ```tsx
-     <PortfolioSection 
-       portfolioSummary={portfolioSummary}
-       selectedId={selectedShareholderId}
-       setSelectedId={setSelectedShareholderId}
-       shareholderOptions={shareholderOptions}
-     />
-     ```
-
-### 7.2.2 応急対応と妥協点
-
-時間的制約のため、いくつかの問題には応急対応や妥協点を設けました：
-
-1. **空売り問題の応急対応**:
-   - 本来はTransaction.javaとStockProcessor.java間で保有株数を同期すべきでしたが、時間的制約により、フロントエンドでマイナス保有を非表示にする対応を取りました。
-     ```typescript
-     // PortfolioSection.tsx - マイナス保有を非表示に
-     .filter(stock => stock.quantity > 0)
-     ```
-   - この対応はUIレベルの修正であり、バックエンドのデータ整合性問題は解決していません。
-
-2. **通信プロトコルの簡略化**:
-   - 本来はより堅牢なメッセージングプロトコルを実装すべきでしたが、シンプルなJSONベースの通信で妥協しました。
-   - エラー処理や再接続ロジックも簡易的な実装に留めています。
-     ```java
-     try {
-         JsonParser.parseString(json); // パース確認のみ
-         wsServer.broadcast(json);
-     } catch (JsonSyntaxException e) {
-         System.err.println("WebSocket送信エラー: 無効なJSON形式です。");
-     }
-     ```
-
-3. **Transaction生成の簡略化**:
-   - より現実的な取引生成アルゴリズムを実装する予定でしたが、基本的な確率論的アプローチに留めました。
-     ```java
-     private static int determineQuantity(int shareholderId, int stockId) {
-         // 基本的な確率ベースの取引量決定
-         if (random.nextBoolean()) {
-             return generatePositiveQuantity(); // 買い注文
-         } else {
-             // 売り注文（保有数制限あり）
-             // ...
-         }
-     }
-     ```
-
-4. **統計処理の簡略化**:
-   - より詳細な投資分析指標（シャープレシオ、アルファ値など）を実装する予定でしたが、基本的な集計統計に留めました。
-   - これにより、計算負荷を抑え、リアルタイム性能を確保しています。
 
 ## 7.3 未解決の課題
 
@@ -3087,10 +3149,8 @@ const createChartData = () => {
    - より堅牢なエラーリカバリーメカニズムの実装が必要です。
 
 5. **パフォーマンス最適化**:
-   - 長時間稼働時や大量データ処理時のパフォーマンス検証が不十分です。
-   - メモリリーク、CPUボトルネックなどの可能性があります。
-
-これらの課題は、将来的な改良版で対応することを想定しています。
+   - 現時点でもフロントエンドでの表示までに目に見えた遅延が見られており、取引量を増やしたり大量のデータ処理時のパフォーマンスがさらに低下することが予想されます。
+   - より実用的なシステムにするには原因の解明・解決が必要です。
 
 # 8. 評価と検証
 
@@ -4024,7 +4084,6 @@ const createChartData = () => {
 
 5. **ユーザビリティ向上**:
    - 大きな価格変動時のアラート機能
-   - 投資家のパフォーマンス指標（シャープレシオなど）の追加
    - カスタマイズ可能なダッシュボード
 
 これらの課題を段階的に解決することで、より現実的かつ教育的価値の高いシミュレーションシステムに発展させることができます。特に、データ整合性の問題は優先度が高く、アーキテクチャの根本的な見直しも含めて対応を検討します。
@@ -4036,10 +4095,9 @@ const createChartData = () => {
 3. Java WebSocket: https://www.oracle.com/technical-resources/articles/java/jsr356.html
 4. TailwindCSS: https://tailwindcss.com/docs
 5. React Bootstrap: https://react-bootstrap.netlify.app/
-6. 浜川商事：金融工学とJavaによる市場リスク管理入門, 2005
-7. Gson: https://github.com/google/gson
-8. Java Concurrency: https://docs.oracle.com/javase/tutorial/essential/concurrency/
-9. TypeScript: https://www.typescriptlang.org/docs/
+6. Gson: https://github.com/google/gson
+7. Java Concurrency: https://docs.oracle.com/javase/tutorial/essential/concurrency/
+8. TypeScript: https://www.typescriptlang.org/docs/
 
 # 付録
 
@@ -4154,7 +4212,7 @@ work-06/
 ### 1. プロジェクトの取得
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Vigener/RealTime-Data.git
 cd work-06
 ```
 
@@ -4222,10 +4280,18 @@ npm run dev
 #### レスポンシブ表示の確認
 
 - ブラウザのサイズを変更することで表示レイアウトが切り替わる
-  - **PC (1200px以上)**: 3列表示（統計 | ポートフォリオ | 取引履歴）
-  - **タブレット・スマホ**: 2列表示（ポートフォリオ+統計 | 取引履歴+統計）
+  - **992px以上**: 3列表示（統計 | ポートフォリオ | 取引履歴）
+  - **768px以上992px未満**: 2列表示（ポートフォリオ+統計 | 取引履歴+統計）
+  - **768px未満**: 1列表示
 
-## D. 動作デモ
+## D. 発表スライド
+
+2025年7月30日に行われた最終課題の発表で使用したスライドのリンクです。
+
+[OneDrive 共有リンク](https://o365tsukuba-my.sharepoint.com/:b:/g/personal/s2310970_u_tsukuba_ac_jp/EVh9qbcx_QxPutksIR03fJUBvjfcDTzBTD7pP1Z-2iJXCA?e=SfMB85)
+
+
+<!-- ## D. 動作デモ
 
 ### 画面構成
 
@@ -4241,9 +4307,9 @@ npm run dev
 
 画面幅が1200px未満の場合、2列レイアウトに自動調整されます。
 
-!モバイル表示
+!モバイル表示 -->
 
-### 主な機能の動作確認ポイント
+<!-- ### 主な機能の動作確認ポイント
 
 1. **リアルタイム取引履歴**
    - 「接続」ボタンをクリック後、取引履歴が5秒間のスライディングウィンドウで更新される
@@ -4260,9 +4326,9 @@ npm run dev
 
 4. **株価変動の確認**
    - 取引発生時に株価がリアルタイムで変動する
-   - 買い注文で株価上昇、売り注文で株価下落の傾向が確認できる
+   - 買い注文で株価上昇、売り注文で株価下落の傾向が確認できる -->
 
-## 11. まとめ
+<!-- ## 11. まとめ
 
 ### 11.1 開発成果
 
@@ -4367,9 +4433,9 @@ npm run dev
      - カスタマイズ可能なダッシュボード機能
      - 取引条件設定機能（価格アラート等）
 
-これらの課題に対応することで、より現実的かつ教育的価値の高いシミュレーションシステムへの発展が期待できます。特にデータ整合性の問題は優先度が高く、マイクロサービスアーキテクチャの根本的な設計見直しも含めて対応を検討する必要があります。
+これらの課題に対応することで、より現実的かつ教育的価値の高いシミュレーションシステムへの発展が期待できます。特にデータ整合性の問題は優先度が高く、マイクロサービスアーキテクチャの根本的な設計見直しも含めて対応を検討する必要があります。 -->
 
-## E. 参考文献・謝辞
+<!-- ## E. 参考文献・謝辞
 
 ### 参考文献
 
@@ -4381,12 +4447,12 @@ npm run dev
 6. 浜川商事：金融工学とJavaによる市場リスク管理入門, 2005
 7. Gson公式リポジトリ: https://github.com/google/gson
 8. Java Concurrency Tutorial: https://docs.oracle.com/javase/tutorial/essential/concurrency/
-9. TypeScript公式ドキュメント: https://www.typescriptlang.org/docs/
+9. TypeScript公f式ドキュメント: https://www.typescriptlang.org/docs/ -->
 
-### 謝辞
+<!-- ### 謝辞
 
 本プロジェクトの実装にあたり、リアルタイムデータ処理の授業で学んだ知識と技術が大いに役立ちました。特にWebSocket通信やスライディングウィンドウの概念は、授業での学びを直接応用することができました。
 
 また、React、Chart.js、Javaなどのオープンソースコミュニティにより提供されている豊富なライブラリとドキュメントに感謝します。これらのツールがなければ、短期間でこのようなリアルタイムシステムを構築することは困難だったでしょう。
 
-最後に、貴重なフィードバックと技術的なアドバイスを提供してくださった指導教員と、共に学んだ仲間たちに心から感謝いたします。
+最後に、貴重なフィードバックと技術的なアドバイスを提供してくださった指導教員と、共に学んだ仲間たちに心から感謝いたします。 -->
