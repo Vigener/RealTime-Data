@@ -123,7 +123,7 @@ public class StockInfo {
         this.stockName = stockName;
     }
     
-    public double getDividendPerShare() {
+    public int getDividendPerShare() {
         return dividendPerShare;
     }
 
@@ -183,5 +183,17 @@ public class StockInfo {
                 ", companyType=" + companyType +
                 ", marketType=" + marketType +
                 '}';
+    }
+
+    // 基準価格をintで取得するメソッド（株価表示用）
+    public int getBasePriceAsInt() {
+        long basePrice = (long) StockPriceCalculator.calculateBasePrice(this);
+        // 999円以下に制限して返す
+        return (int) Math.min(basePrice, 999);
+    }
+    
+    // 元のメソッドはlongのまま保持
+    public long getBasePrice() {
+        return (long) StockPriceCalculator.calculateBasePrice(this);
     }
 }

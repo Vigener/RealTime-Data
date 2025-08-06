@@ -45,6 +45,8 @@ public class Config {
     // public static final int SLIDING_WINDOW_STEP_MS = 100; // スライディングウィンドウのステップ
     public static final int SLIDING_WINDOW_STEP_MS = 500; // スライディングウィンドウのステップ(500ms = 0.5秒)
 
+    public static final int MAX_STOCK_PRICE = 99999; // 株価の最大値
+
 
 
     // CSVファイルパス - 動的に解決
@@ -83,8 +85,12 @@ public class Config {
     public static final String SHAREHOLDER_CSV_PATH = getResourcePath("shareholder_metadata.csv");
     // つくば市のデータ
     public static final String TSUKUBA_CSV_PATH = getResourcePath("tsukuba_metadata.csv");
-    
+    // 初期価格データ
+    // public static final String INITIAL_PRICE_CSV_PATH = getResourcePath("initial_price_data.csv");
+    public static final String INITIAL_PRICE_CSV_PATH = "server-app/src/main/resources/initial_price_data.csv";
+
     public static final int WEBSOCKET_PORT = 3000; // WebSocketのポート番号
+    public static final int PRICE_MANAGER_PORT = 2003;
 
 
     
